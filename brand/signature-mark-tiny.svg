@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- 16-24px only. No gap band, heavier stroke, flatter curve: at this size
+       anything else collapses into a smudge. -->
+  <rect width="1024" height="1024" rx="232" fill="#0d0d12"/>
+  <path d="M 170 600 C 250 590, 250 520, 310 522
+           C 380 524, 366 660, 430 720
+           C 470 758, 520 756, 548 700
+           C 590 618, 570 440, 636 386
+           C 700 334, 790 300, 862 268"
+        fill="none" stroke="#5eead4" stroke-width="112"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

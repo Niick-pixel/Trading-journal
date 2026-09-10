@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { DATA_DIR, SCREENSHOTS_DIR } from '../lib/paths';
-
-const MIGRATIONS_DIR = path.join(process.cwd(), 'db', 'migrations');
+import { DATA_DIR, MIGRATIONS_DIR, SCREENSHOTS_DIR } from '../lib/paths';
 
 /**
  * Applies any migration file that hasn't run yet, in filename order, each in

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="ground" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%"   stop-color="#1a1a22"/>
+      <stop offset="55%"  stop-color="#0d0d12"/>
+      <stop offset="100%" stop-color="#08080b"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#10b981"/>
+      <stop offset="50%"  stop-color="#5eead4"/>
+      <stop offset="100%" stop-color="#a7f3d0"/>
+    </linearGradient>
+    <!-- the specular top edge: a hairline, not a dome -->
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="22%"  stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="78%"  stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="26" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="232" fill="url(#ground)"/>
+
+  <!-- the gap price inverts through -->
+  <rect x="150" y="452" width="724" height="120" rx="18" fill="#5eead4" fill-opacity="0.13"/>
+  <rect x="150" y="452" width="724" height="120" rx="18" fill="none"
+        stroke="#5eead4" stroke-opacity="0.34" stroke-width="3"/>
+
+  <!-- One continuous stroke, read left to right: drift, sweep the low,
+       invert hard up through the gap, and leave. The model, drawn once. -->
+  <g filter="url(#glow)">
+    <path d="M 148 566
+             C 214 560, 232 500, 292 502
+             C 356 504, 344 628, 402 700
+             C 438 744, 496 748, 528 690
+             C 566 620, 548 452, 606 396
+             C 660 344, 700 372, 744 330
+             C 786 290, 836 268, 876 258"
+          fill="none" stroke="url(#ink)" stroke-width="52"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <rect x="3" y="3" width="1018" height="1018" rx="230" fill="none"
+        stroke="url(#edge)" stroke-width="3"/>
+</svg>

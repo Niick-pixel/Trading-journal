@@ -1,0 +1,46 @@
+name: Build Windows portable
+
+# Produces Signature-portable-<version>.exe — a single file that needs no
+# installer, no admin rights, and no Node on the target machine. Run it from
+# anywhere; it keeps its journal in a data/ folder beside itself.
+#
+# This runs on a Windows runner because a Windows executable cannot be built
+# reliably from Linux or macOS.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'brand/**']
+  workflow_dispatch:
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the portable executable
+        run: npm run desktop:build
+        env:
+          # Nothing here is signed; skip electron-builder's signing discovery
+          # rather than failing on a missing certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Show what was produced
+        shell: bash
+        run: ls -lh release/*.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Signature-portable
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30

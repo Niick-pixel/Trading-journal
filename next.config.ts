@@ -1,6 +1,18 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Emits .next/standalone with a self-contained server and only the
+  // dependencies it actually uses — which is what the packaged desktop build
+  // runs, and why the portable exe does not have to carry all of node_modules.
+  output: 'standalone',
+
+  // File tracing swept ./data into the bundle, which means a build made on a
+  // machine that had been used would carry that machine's journal.db inside
+  // the executable. Never ship someone's trades.
+  outputFileTracingExcludes: {
+    '*': ['data/**', 'brand/**', 'release/**', 'build/**'],
+  },
+
   // The Electron shell loads the app over 127.0.0.1 while Next's dev server
   // binds localhost, so HMR is cross-origin by Next's reckoning. Allow it, or
   // the desktop window silently loses hot reload.

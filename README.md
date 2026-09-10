@@ -71,9 +71,28 @@ http://localhost:3000.
 The database and screenshot folders are created automatically on first launch.
 There is no seed data.
 
+## Portable executable
+
+You don't have to install Node at all if you'd rather just run the app.
+
+Every push to `main` builds **`Signature-portable-<version>.exe`** on a Windows
+runner. Grab it from the repo's **Actions** tab → the most recent
+*Build Windows portable* run → **Artifacts** at the bottom of the summary. You
+can also trigger a build by hand from that tab (*Run workflow*).
+
+It is a single file. No installer, no admin rights, nothing written to AppData
+or the registry — it keeps its journal in a `data/` folder **beside the exe**,
+so the whole thing travels on a USB stick if you want it to.
+
+> Windows SmartScreen will warn the first time, because the executable isn't
+> code-signed (that needs a paid certificate). *More info → Run anyway.*
+
+To build one yourself on a Windows machine: `npm run desktop:build`.
+
 ## Where your data lives
 
-Everything Signature owns is inside `./data`:
+Everything Signature owns is inside one `data/` folder — `./data` when running
+from source, or beside the executable in a portable build:
 
 ```
 data/

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx --conditions=react-server db/cli-migrate.ts",
     "desktop": "electron .",
-    "desktop:build": "next build && electron-builder",
+    "desktop:build": "next build && node scripts/assemble-standalone.mjs && electron-builder --win portable",
     "predesktop": "node scripts/ensure-electron.mjs"
   },
   "dependencies": {
@@ -38,7 +38,26 @@
     "appId": "com.signature.journal",
     "productName": "Signature",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
+    },
+    "asar": false,
+    "win": {
+      "icon": "build/icon.ico",
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "Signature-portable-${version}.exe",
+      "unicode": true
+    },
+    "files": [
+      "electron/**/*",
+      ".next/standalone/**/*",
+      "db/migrations/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
     }
   },
   "engines": {

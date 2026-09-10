@@ -10,6 +10,21 @@ const net = require('node:net');
 const isDev = !app.isPackaged;
 const ROOT = path.join(__dirname, '..');
 
+/**
+ * Where the journal lives.
+ *
+ * Running from source it is ./data, beside the code. In a packaged build it
+ * sits next to the executable, which is what makes the portable build actually
+ * portable: copy Signature.exe onto a USB stick, and its data/ folder travels
+ * with it. Nothing is written to AppData or the registry.
+ */
+const DATA_DIR = app.isPackaged
+  ? path.join(path.dirname(process.execPath), 'data')
+  : path.join(ROOT, 'data');
+
+/** In a packaged build the app is unpacked under resources/app. */
+const APP_DIR = app.isPackaged ? path.join(process.resourcesPath, 'app') : ROOT;
+
 /** The window ground. Signature defaults to light, so the frame must too —
  *  otherwise the shell flashes black before React paints. */
 const SHELL_BG = '#ececed';
@@ -57,7 +72,14 @@ function waitForServer(port, timeoutMs = 120_000) {
 }
 
 function startNext(port) {
-  const bin = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
+  // In development Next runs from its CLI; a packaged build runs the standalone
+  // server that `next build` emits, which carries only the dependencies it
+  // actually needs.
+  const entry = app.isPackaged
+    ? path.join(APP_DIR, '.next', 'standalone', 'server.js')
+    : path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
+
+  const args = app.isPackaged ? [entry] : [entry, 'dev', '-p', String(port)];
 
   // Run the server on Electron's own bundled Node (24.x), not a system install.
   //
@@ -66,12 +88,18 @@ function startNext(port) {
   // from node:sqlite — built into the runtime — that constraint is gone, and
   // using Electron's Node means the app depends on nothing outside its own
   // folder. That is what makes a portable build possible.
-  nextServer = spawn(process.execPath, [bin, isDev ? 'dev' : 'start', '-p', String(port)], {
-    cwd: ROOT,
+  nextServer = spawn(process.execPath, args, {
+    cwd: app.isPackaged ? path.join(APP_DIR, '.next', 'standalone') : ROOT,
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       NODE_ENV: isDev ? 'development' : 'production',
+      // process.cwd() means nothing in a packaged app, so hand the server its
+      // paths explicitly rather than letting it guess.
+      SIGNATURE_DATA_DIR: DATA_DIR,
+      SIGNATURE_MIGRATIONS_DIR: path.join(APP_DIR, 'db', 'migrations'),
+      PORT: String(port),
+      HOSTNAME: '127.0.0.1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
