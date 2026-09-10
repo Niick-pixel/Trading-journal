@@ -11,6 +11,7 @@ import {
 import { GRADE_MAX } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
 import { spring, riseIn } from '@/lib/motion';
+import { hueToRgb } from '@/lib/layout';
 import { MIN_EXPLANATION } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Disclosure } from '@/components/ui/Disclosure';
@@ -26,14 +27,6 @@ import { ScreenshotDropzone } from './ScreenshotDropzone';
 function toLocalInput(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** REASON_HUE stores a hue angle; the UI needs an 'r g b' triple. */
-function hueToRgb(h: number, s = 0.62, l = 0.62): string {
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
-  return `${f(0)} ${f(8)} ${f(4)}`;
 }
 
 export function NewTradeForm() {

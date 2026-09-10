@@ -1,12 +1,16 @@
-export default function Page() {
+import { listTrades } from '@/db/trades';
+import { Whiteboard } from '@/components/whiteboard/Whiteboard';
+import { TitleBar } from '@/components/shell/TitleBar';
+
+export const dynamic = 'force-dynamic';
+
+export default function WhiteboardPage() {
   return (
-    <main className="grid h-dvh place-items-center p-8">
-      <div className="glass w-full max-w-md rounded-[24px] p-8 text-center">
-        <h1 className="text-2xl font-semibold">Signature</h1>
-        <p className="mt-2 text-sm" style={{ color: 'var(--text-dim)' }}>
-          Data layer and desktop shell are live. Screens next.
-        </p>
+    <div className="flex h-dvh flex-col">
+      <TitleBar />
+      <div className="min-h-0 flex-1">
+        <Whiteboard trades={listTrades()} />
       </div>
-    </main>
+    </div>
   );
 }
