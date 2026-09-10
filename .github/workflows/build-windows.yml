@@ -16,6 +16,8 @@ on:
 jobs:
   portable:
     runs-on: windows-latest
+    permissions:
+      contents: write        # needed to publish the release below
     steps:
       - uses: actions/checkout@v4
 
@@ -44,3 +46,23 @@ jobs:
           path: release/*.exe
           if-no-files-found: error
           retention-days: 30
+
+      # Artifacts are buried at the bottom of a run page, expire after 30 days,
+      # require a GitHub login, and arrive wrapped in a zip even for one file.
+      # Publish the same executable as a release so it is a plain download link
+      # on the front of the repository that anyone can click.
+      - name: Publish as the latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest release/*.exe \
+            --title "Signature — latest build" \
+            --prerelease \
+            --notes "Portable Windows build of Signature. Download the .exe below, put it in a folder of its own, and run it — it keeps its journal in a \`data\` folder beside itself.
+
+          Windows SmartScreen will warn on first launch because the executable is not code-signed. Choose **More info → Run anyway**.
+
+          Built from \`${{ github.sha }}\`."
+

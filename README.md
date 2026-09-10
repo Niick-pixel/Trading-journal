@@ -75,10 +75,11 @@ There is no seed data.
 
 You don't have to install Node at all if you'd rather just run the app.
 
-Every push to `main` builds **`Signature-portable-<version>.exe`** on a Windows
-runner. Grab it from the repo's **Actions** tab → the most recent
-*Build Windows portable* run → **Artifacts** at the bottom of the summary. You
-can also trigger a build by hand from that tab (*Run workflow*).
+Download it here: **[latest release](https://github.com/Niick-pixel/Trading-journal/releases/latest)**
+— the `.exe` is under *Assets*.
+
+Every push to `main` rebuilds it on a Windows runner and republishes that
+release, so the link always points at the current build.
 
 It is a single file. No installer, no admin rights, nothing written to AppData
 or the registry — it keeps its journal in a `data/` folder **beside the exe**,
