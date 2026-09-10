@@ -57,9 +57,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --cleanup-tag --yes || true
+          # Deliberately not a prerelease: GitHub's /releases/latest URL skips
+          # prereleases entirely, so marking it one made that link 404 and kept
+          # the build off the front of the repository.
           gh release create latest release/*.exe \
             --title "Signature — latest build" \
-            --prerelease \
+            --latest \
             --notes "Portable Windows build of Signature. Download the .exe below, put it in a folder of its own, and run it — it keeps its journal in a \`data\` folder beside itself.
 
           Windows SmartScreen will warn on first launch because the executable is not code-signed. Choose **More info → Run anyway**.
