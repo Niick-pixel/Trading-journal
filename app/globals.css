@@ -20,7 +20,7 @@
 :root {
   color-scheme: dark;
 
-  --bg: #0a0a0c;
+  --bg: #08080b;
   --bg-raised: #101014;
   --text: #f2f2f5;
   --text-dim: #8b8b93;
@@ -29,10 +29,10 @@
   /* Liquid glass */
   --glass-fill: rgba(255, 255, 255, 0.06);
   --glass-fill-strong: rgba(255, 255, 255, 0.09);
-  --glass-stroke: rgba(255, 255, 255, 0.10);
+  --glass-stroke: rgba(255, 255, 255, 0.12);
   /* The specular top edge — brighter than the rest of the stroke.
      This single line is what sells the glass. */
-  --glass-specular: rgba(255, 255, 255, 0.28);
+  --glass-specular: rgba(255, 255, 255, 0.42);
   --glass-blur: blur(24px) saturate(180%);
 
   /* Layered shadows: one tight and dark, one wide and soft. Never one flat. */
@@ -84,6 +84,38 @@ body {
   overflow: hidden; /* the whiteboard owns its own scrolling */
 }
 
+/*
+  The ambient field.
+
+  Liquid glass is not a colour, it is a behaviour: it only reads as glass when
+  there is something luminous *behind* it for backdrop-filter to blur and
+  saturate. On a flat near-black ground the same CSS renders as dull grey card
+  stock. These three wide, low-alpha pools give every surface something to
+  refract without ever becoming decoration in their own right — they sit far
+  below the content and are never the thing you look at.
+*/
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.16), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.13), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.11), transparent 62%);
+  filter: blur(28px);
+}
+
+@media (prefers-color-scheme: light) {
+  body::before {
+    background:
+      radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.22), transparent 62%),
+      radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.18), transparent 62%),
+      radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.16), transparent 62%);
+  }
+}
+
 /* Headings run tight; body runs generous. */
 h1, h2, h3 { letter-spacing: -0.022em; }
 
@@ -105,7 +137,7 @@ h1, h2, h3 { letter-spacing: -0.022em; }
   inset: 0;
   border-radius: inherit;
   padding-top: 1px;
-  background: linear-gradient(to bottom, var(--glass-specular), transparent 1px);
+  background: linear-gradient(to bottom, var(--glass-specular), rgba(255, 255, 255, 0.04) 1.5px, transparent 40%);
   -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);

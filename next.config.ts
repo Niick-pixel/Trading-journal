@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   // You asked for no telemetry. Next also collects its own, anonymously —
   // NEXT_TELEMETRY_DISABLED in .env.local turns that off as well.
   agentRules: false,
+
+  // The floating dev badge sits on top of the whiteboard. Not in a window app.
+  devIndicators: false,
 };
 
 export default nextConfig;
