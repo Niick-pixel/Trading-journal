@@ -8,7 +8,38 @@ It exists to expose **why** you take trades, not just what happened.
 
 ## Setup
 
-Requires **Node 20.9 or newer** (`node --version`).
+### 1. Install Node.js (once per machine)
+
+Signature needs **Node 20.9 or newer**. `npm` comes bundled with it — if your
+terminal says `'npm' is not recognized` or `command not found`, Node is what's
+missing.
+
+**Windows** (PowerShell):
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+**macOS**:
+
+```bash
+brew install node
+```
+
+Or download the LTS installer from <https://nodejs.org>.
+
+> **Close your terminal and open a new one afterwards.** The installer edits
+> your `PATH`, and a terminal that was already open keeps the old one — `npm`
+> will still look missing until you reopen it.
+
+Check it worked:
+
+```bash
+node -v      # v20.9.0 or higher
+npm -v
+```
+
+### 2. Run Signature
 
 ```bash
 npm install
@@ -16,8 +47,11 @@ npm run desktop      # opens Signature in its own window
 ```
 
 `npm install` downloads Electron (~230 MB) and builds `better-sqlite3` as a
-native module, so the first install is slow and needs a working network. Every
-run after that is offline.
+native module, so the first install takes a few minutes and needs a working
+network. Every run after that is offline.
+
+If the window won't open for any reason, `npm run dev` serves the identical app
+at <http://localhost:3000> and needs no Electron binary at all.
 
 That's the normal way to run it. The Electron shell starts the local Next.js
 server on a free port, waits for it, and loads it into a frameless window — the
