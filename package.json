@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx --conditions=react-server db/cli-migrate.ts",
     "desktop": "electron .",
-    "desktop:build": "next build && electron-builder"
+    "desktop:build": "next build && electron-builder",
+    "predesktop": "node scripts/ensure-electron.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",
