@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { OUTCOMES, RUBRIC, type Outcome } from '@/lib/domain';
+import { CONTEXT_FLAG_LIST, OUTCOMES, RUBRIC, type Outcome } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
 import { spring, springSoft } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
@@ -165,11 +165,17 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   </div>
                 )}
 
+                {/* Only what was actually true. A wall of eleven greyed-out
+                    rows tells you nothing; the ones you ticked do. */}
                 <div className="mb-6 flex flex-wrap gap-x-4 gap-y-2">
-                  <Check on={trade.sweep_before_entry} label="Sweep before entry" />
-                  <Check on={trade.singular_gap} label="Singular gap" />
-                  <Check on={trade.target_unswept} label="Target unswept" />
-                  <Check on={trade.smt} label="SMT divergence" />
+                  {CONTEXT_FLAG_LIST.filter((flag) => trade[flag.key]).map((flag) => (
+                    <Check key={flag.key} on label={flag.label} />
+                  ))}
+                  {!CONTEXT_FLAG_LIST.some((flag) => trade[flag.key]) && (
+                    <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                      No context noted.
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">

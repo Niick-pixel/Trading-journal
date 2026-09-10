@@ -50,6 +50,56 @@ export function isTaken(outcome: Outcome): boolean {
   return outcome !== 'Not taken';
 }
 
+/**
+ * The context checklist, in the order it appears during capture.
+ *
+ * Split into two groups because eleven pills in one undifferentiated block is a
+ * wall: the first group is what the setup looked like, the second is what was
+ * confirming it and what was in the way.
+ */
+export const CONTEXT_GROUPS = [
+  {
+    label: 'The setup',
+    flags: [
+      { key: 'sweep_before_entry', label: 'Sweep before entry', hint: 'Was liquidity swept near the gap?' },
+      { key: 'singular_gap', label: 'Singular gap', hint: 'Rule 1 — one clean obvious gap, not stacked.' },
+      { key: 'displacement', label: 'Displacement', hint: 'Did price actually displace through the gap, or drift?' },
+      { key: 'mss_confirmed', label: 'MSS confirmed', hint: 'Had market structure shifted before you entered?' },
+      { key: 'volume_imbalance', label: 'Volume imbalance', hint: 'A gap in delivery between the candle bodies.' },
+      { key: 'consequent_encroachment', label: 'Consequent encroachment', hint: 'Did the entry respect the 50% of the gap?' },
+    ],
+  },
+  {
+    label: 'Target, timing & confluence',
+    flags: [
+      { key: 'target_unswept', label: 'Target unswept', hint: 'Rule 4 — the next high/low was still unswept.' },
+      { key: 'equal_highs_lows', label: 'Equal highs / lows', hint: 'Were you targeting a pair of equal highs or lows?' },
+      { key: 'smt', label: 'SMT divergence', hint: 'Divergence against the correlated instrument.' },
+      { key: 'retest_entry', label: 'Retest entry', hint: 'Entered on the retest rather than grabbing it immediately.' },
+      { key: 'news_window', label: 'News window', hint: 'Entry landed inside a high-impact news window.' },
+    ],
+  },
+] as const;
+
+export type ContextFlag = (typeof CONTEXT_GROUPS)[number]['flags'][number]['key'];
+
+export interface ContextFlagSpec {
+  key: ContextFlag;
+  label: string;
+  hint: string;
+}
+
+/**
+ * Every context flag in one flat, plainly-typed list.
+ *
+ * Flattening CONTEXT_GROUPS at each call site infers the `as const` tuples too
+ * narrowly to be useful, so widen it once here.
+ */
+export const CONTEXT_FLAG_LIST: ContextFlagSpec[] =
+  CONTEXT_GROUPS.flatMap((group) => group.flags.map((flag) => ({ ...flag })));
+
+export const CONTEXT_FLAGS: ContextFlag[] = CONTEXT_FLAG_LIST.map((f) => f.key);
+
 /** Rubric ceilings, so the sliders and the CHECK constraints can't drift apart. */
 export const RUBRIC = {
   candle_strength: { max: 4, label: 'Candle strength', hint: 'How decisively did the inverting candle close through the gap?' },

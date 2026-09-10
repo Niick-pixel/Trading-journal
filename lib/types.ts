@@ -18,6 +18,13 @@ export interface Trade {
   sweep_before_entry: boolean;
   singular_gap: boolean;
   target_unswept: boolean;
+  displacement: boolean;
+  mss_confirmed: boolean;
+  volume_imbalance: boolean;
+  consequent_encroachment: boolean;
+  equal_highs_lows: boolean;
+  retest_entry: boolean;
+  news_window: boolean;
   premium_discount: PremiumDiscount;
   target_type: TargetType;
   smt: boolean;

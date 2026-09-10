@@ -6,6 +6,7 @@ declare global {
     signature?: {
       isDesktop: true;
       platform: NodeJS.Platform;
+      openDataFolder: () => Promise<string>;
       onNavigate: (handler: (route: string) => void) => () => void;
     };
   }

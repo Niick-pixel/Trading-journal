@@ -2,8 +2,9 @@
 // process starts and owns — nothing is ever served to an outside browser, and
 // the server dies with the window.
 
-const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
+const { app, BrowserWindow, shell, Menu, dialog, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
 
@@ -18,9 +19,34 @@ const ROOT = path.join(__dirname, '..');
  * portable: copy Signature.exe onto a USB stick, and its data/ folder travels
  * with it. Nothing is written to AppData or the registry.
  */
-const DATA_DIR = app.isPackaged
-  ? path.join(path.dirname(process.execPath), 'data')
-  : path.join(ROOT, 'data');
+function resolveDataDir() {
+  if (!app.isPackaged) return path.join(ROOT, 'data');
+
+  // A portable build is a self-extracting archive: it unpacks itself into a
+  // temp folder and runs from there, so process.execPath points at %TEMP%,
+  // not at the executable the user actually double-clicked. Writing the
+  // journal there means it is thrown away when the temp folder is cleaned.
+  // electron-builder exports the real location for exactly this reason.
+  const beside = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
+  const candidate = path.join(beside, 'data');
+
+  // Beside the executable is only the right answer if it is actually writable.
+  // Dropped into Program Files, or onto a read-only volume, it is not — and a
+  // journal that silently fails to save is worse than one in an unexpected
+  // place. Fall back to the per-user application data directory and say so.
+  try {
+    fs.mkdirSync(candidate, { recursive: true });
+    fs.accessSync(candidate, fs.constants.W_OK);
+    return candidate;
+  } catch {
+    const fallback = path.join(app.getPath('userData'), 'data');
+    fs.mkdirSync(fallback, { recursive: true });
+    console.warn(`[signature] ${candidate} is not writable; using ${fallback}`);
+    return fallback;
+  }
+}
+
+const DATA_DIR = resolveDataDir();
 
 /** In a packaged build the app is unpacked under resources/app. */
 const APP_DIR = app.isPackaged ? path.join(process.resourcesPath, 'app') : ROOT;
@@ -162,6 +188,14 @@ function createWindow(port) {
   mainWindow.loadURL(`http://127.0.0.1:${port}`);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+// The Settings panel offers to reveal the journal folder; only the main
+// process can talk to the OS file browser.
+ipcMain.handle('signature:open-data-folder', async () => {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  await shell.openPath(DATA_DIR);
+  return DATA_DIR;
+});
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';

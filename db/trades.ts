@@ -5,13 +5,13 @@ import { getDb } from './index';
 import { deleteScreenshot } from './screenshots';
 import type { SettleInput, Trade, TradeFilters, TradeInput } from '../lib/types';
 
-type Row = Omit<
-  Trade,
-  'macro_time' | 'macro_time_auto' | 'sweep_before_entry' | 'singular_gap' | 'target_unswept' | 'smt'
-> & Record<'macro_time' | 'macro_time_auto' | 'sweep_before_entry' | 'singular_gap' | 'target_unswept' | 'smt', number>;
+type BoolColumn = (typeof BOOL_COLUMNS)[number];
+type Row = Omit<Trade, BoolColumn> & Record<BoolColumn, number>;
 
 const BOOL_COLUMNS = [
   'macro_time', 'macro_time_auto', 'sweep_before_entry', 'singular_gap', 'target_unswept', 'smt',
+  'displacement', 'mss_confirmed', 'volume_imbalance', 'consequent_encroachment',
+  'equal_highs_lows', 'retest_entry', 'news_window',
 ] as const;
 
 function hydrate(row: Row): Trade {
@@ -37,7 +37,10 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
 const WRITABLE = [
   'date', 'instrument', 'direction', 'session', 'macro_time', 'macro_time_auto', 'reason',
   'setup_type', 'htf_bias', 'sweep_before_entry', 'singular_gap', 'target_unswept',
-  'premium_discount', 'target_type', 'smt', 'candle_strength', 'inversion_speed', 'risk_reward',
+  'premium_discount', 'target_type', 'smt',
+  'displacement', 'mss_confirmed', 'volume_imbalance', 'consequent_encroachment',
+  'equal_highs_lows', 'retest_entry', 'news_window',
+  'candle_strength', 'inversion_speed', 'risk_reward',
   'contracts', 'risk_dollars', 'stop_points', 'outcome', 'r_multiple', 'explanation', 'lesson',
   'screenshot_path',
 ] as const;

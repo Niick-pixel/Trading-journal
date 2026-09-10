@@ -134,7 +134,7 @@ export function Toolbar({
 
       <div className="ml-auto flex items-center gap-3">
         <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
-          {shown === total ? `${total} trades` : `${shown} of ${total}`}
+          {shown === total ? `${total} trade${total === 1 ? '' : 's'}` : `${shown} of ${total}`}
         </span>
         {filtersActive(filters) && (
           <motion.button

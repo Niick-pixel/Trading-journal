@@ -1,6 +1,6 @@
 import {
-  DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS, RUBRIC,
-  SESSIONS, SETUP_TYPES, TARGET_TYPES,
+  CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
+  RUBRIC, SESSIONS, SETUP_TYPES, TARGET_TYPES, type ContextFlag,
 } from './domain';
 import { MIN_EXPLANATION, type TradeInput } from './types';
 
@@ -72,10 +72,10 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       instrument: instrument!, direction: direction!, session: session!,
       macro_time: bool('macro_time'), macro_time_auto: t.macro_time_auto !== false,
       reason, setup_type: setup_type!, htf_bias: htf_bias!,
-      sweep_before_entry: bool('sweep_before_entry'),
-      singular_gap: bool('singular_gap'),
-      target_unswept: bool('target_unswept'),
-      premium_discount: premium_discount!, target_type: target_type!, smt: bool('smt'),
+      // Every context flag, read the same way. Anything absent is simply false,
+      // which is what an older client or an older row means by omitting it.
+      ...(Object.fromEntries(CONTEXT_FLAGS.map((f) => [f, bool(f)])) as Record<ContextFlag, boolean>),
+      premium_discount: premium_discount!, target_type: target_type!,
       candle_strength, inversion_speed, risk_reward,
       contracts: numOrNull('contracts'),
       risk_dollars: numOrNull('risk_dollars'),

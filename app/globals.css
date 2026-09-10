@@ -239,26 +239,18 @@ h1, h2, h3 { letter-spacing: -0.022em; }
 .glass::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 1px;
+  inset: 0;
+  border-radius: inherit;
   /*
     The specular top edge — a 1px highlight along the top border only, brighter
     than the rest of the stroke. This one line is what sells the glass.
 
-    Drawn as a real 1px strip rather than a masked gradient: the mask-composite
-    approach silently failed to clip in Chromium and rendered as a wide band
-    down the top third of every card. Fading both ends keeps the line from
-    overshooting the rounded corners at any radius.
+    Drawn as a top border on a box that inherits the radius, so it follows the
+    corner curve and tapers out of it. Earlier versions used a flat 1px strip
+    spanning the full width, which cut straight across the rounded corners and
+    showed up as a notch on every control.
   */
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--glass-specular) 14%,
-    var(--glass-specular) 86%,
-    transparent
-  );
+  border-top: 1px solid var(--glass-specular);
   pointer-events: none;
   /*
     Absolutely-positioned children — a trade node's screenshot and its scrim —

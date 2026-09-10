@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { BottomLeftControls } from '@/components/shell/SettingsPanel';
+import { ThemeToggle } from '@/components/shell/ThemeToggle';
 
 export const metadata: Metadata = {
   title: 'Signature',
@@ -27,7 +29,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Theme above settings, bottom-left, on every screen. */}
+        <BottomLeftControls>
+          <ThemeToggle />
+        </BottomLeftControls>
+      </body>
     </html>
   );
 }

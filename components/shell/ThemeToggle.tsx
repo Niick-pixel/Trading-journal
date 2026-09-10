@@ -41,12 +41,12 @@ export function ThemeToggle() {
       transition={spring}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="glass grid size-[26px] place-items-center rounded-full"
+      className="glass grid size-[34px] place-items-center rounded-full"
       style={{ color: 'var(--text-dim)' }}
     >
       <motion.svg
         key={theme}
-        width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden
+        width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden
         initial={{ scale: 0.5, rotate: -60, opacity: 0 }}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
         transition={springBouncy}

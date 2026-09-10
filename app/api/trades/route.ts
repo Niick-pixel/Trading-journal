@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createTrade, listTrades } from '@/db/trades';
 import { deleteScreenshot, saveScreenshot } from '@/db/screenshots';
 import { parseTradeInput } from '@/lib/validate';
+import { logError } from '@/lib/log';
 import type { Outcome, Reason, Session } from '@/lib/domain';
 
 export const dynamic = 'force-dynamic';
@@ -58,9 +59,8 @@ export async function POST(request: Request) {
       throw err;
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Could not save the trade.' },
-      { status: 400 },
-    );
+    // Report what actually went wrong. A packaged app has no console, so this
+    // also lands in data/errors.log.
+    return NextResponse.json({ error: logError('POST /api/trades', err) }, { status: 400 });
   }
 }

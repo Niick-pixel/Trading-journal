@@ -3,9 +3,9 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
+  CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
   RUBRIC, SESSIONS, SETUP_TYPES, TARGET_TYPES,
-  type Direction, type HtfBias, type Instrument, type Outcome, type PremiumDiscount,
+  type ContextFlag, type Direction, type HtfBias, type Instrument, type Outcome, type PremiumDiscount,
   type Reason, type Session, type SetupType, type TargetType,
 } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
@@ -35,10 +35,15 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [reason, setReason] = useState<Reason | null>(trade?.reason ?? null);
   const [explanation, setExplanation] = useState(trade?.explanation ?? '');
 
-  const [sweep, setSweep] = useState(trade?.sweep_before_entry ?? false);
-  const [singularGap, setSingularGap] = useState(trade?.singular_gap ?? false);
-  const [targetUnswept, setTargetUnswept] = useState(trade?.target_unswept ?? false);
-  const [smt, setSmt] = useState(trade?.smt ?? false);
+  // One record rather than a useState per flag — there are eleven now, and a
+  // new one should cost a line in CONTEXT_GROUPS, not four scattered edits.
+  const [context, setContext] = useState<Record<ContextFlag, boolean>>(() =>
+    Object.fromEntries(
+      CONTEXT_FLAGS.map((f) => [f, trade ? Boolean(trade[f]) : false]),
+    ) as Record<ContextFlag, boolean>,
+  );
+  const setFlag = (flag: ContextFlag, value: boolean) =>
+    setContext((prev) => ({ ...prev, [flag]: value }));
 
   const [candleStrength, setCandleStrength] = useState(trade?.candle_strength ?? 0);
   const [inversionSpeed, setInversionSpeed] = useState(trade?.inversion_speed ?? 0);
@@ -89,8 +94,8 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       date, instrument, direction, session,
       macro_time: macroTime, macro_time_auto: macroOverride === null,
       reason, setup_type: setupType, htf_bias: htfBias,
-      sweep_before_entry: sweep, singular_gap: singularGap, target_unswept: targetUnswept,
-      premium_discount: premiumDiscount, target_type: targetType, smt,
+      ...context,
+      premium_discount: premiumDiscount, target_type: targetType,
       candle_strength: candleStrength, inversion_speed: inversionSpeed, risk_reward: riskReward,
       contracts: num(contracts), risk_dollars: num(riskDollars), stop_points: num(stopPoints),
       outcome, r_multiple: num(rMultiple),
@@ -102,7 +107,16 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         method: editing ? 'PUT' : 'POST',
         body,
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Could not save the trade.');
+      if (!res.ok) {
+        // A 500 returns an HTML page, not JSON — falling straight through to a
+        // generic message hid the real cause once already.
+        const body = await res.text();
+        let detail = body.slice(0, 300);
+        try {
+          detail = JSON.parse(body).error ?? detail;
+        } catch { /* not JSON; show the raw beginning of the response */ }
+        throw new Error(`${detail} (HTTP ${res.status})`);
+      }
       window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the trade.');
@@ -149,18 +163,24 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           />
         </Field>
 
-        {/* 4 — context, as pills. */}
-        <Field label="Context">
-          <div className="flex flex-wrap gap-2.5">
-            <TogglePill checked={sweep} onChange={setSweep} label="Sweep before entry"
-              hint="Was liquidity swept near the gap?" />
-            <TogglePill checked={singularGap} onChange={setSingularGap} label="Singular gap"
-              hint="Rule 1 — one clean obvious gap, not stacked." />
-            <TogglePill checked={targetUnswept} onChange={setTargetUnswept} label="Target unswept"
-              hint="Rule 4 — the next high/low was still unswept." />
-            <TogglePill checked={smt} onChange={setSmt} label="SMT divergence" accent="var(--accent)" />
-          </div>
-        </Field>
+        {/* 4 — context, as pills, in two groups. */}
+        <div className="space-y-5">
+          {CONTEXT_GROUPS.map((group) => (
+            <Field key={group.label} label={group.label}>
+              <div className="flex flex-wrap gap-2.5">
+                {group.flags.map((flag) => (
+                  <TogglePill
+                    key={flag.key}
+                    checked={context[flag.key]}
+                    onChange={(next) => setFlag(flag.key, next)}
+                    label={flag.label}
+                    hint={flag.hint}
+                  />
+                ))}
+              </div>
+            </Field>
+          ))}
+        </div>
 
         {/* 5 — grading, with the live badge. */}
         <div>
@@ -269,7 +289,9 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       <AnimatePresence>
         {error && (
           <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            transition={spring} className="mt-4 text-[12px]" style={{ color: 'rgb(var(--outcome-loss))' }}>
+            transition={spring}
+            className="mt-4 whitespace-pre-wrap break-words rounded-[14px] p-3 text-[12px] leading-relaxed"
+            style={{ color: 'rgb(var(--outcome-loss))', background: 'rgb(var(--outcome-loss) / 0.10)' }}>
             {error}
           </motion.p>
         )}

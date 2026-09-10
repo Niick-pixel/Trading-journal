@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('signature', {
   isDesktop: true,
   platform: process.platform,
+  /** Opens the journal folder in the OS file browser. */
+  openDataFolder: () => ipcRenderer.invoke('signature:open-data-folder'),
   onNavigate: (handler) => {
     const listener = (_event, route) => handler(route);
     ipcRenderer.on('signature:navigate', listener);
