@@ -39,11 +39,11 @@
     "productName": "Signature",
     "directories": {
       "output": "release",
-      "buildResources": "build"
+      "buildResources": "assets"
     },
     "asar": false,
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "assets/icon.ico",
       "target": "portable"
     },
     "portable": {

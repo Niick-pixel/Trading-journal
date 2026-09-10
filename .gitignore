@@ -5,6 +5,8 @@ node_modules/
 release/
 .next/
 out/
+# Generic build output. Icon assets deliberately live in assets/ instead, so
+# this ignore cannot swallow them the way it silently did once already.
 build/
 next-env.d.ts
 *.tsbuildinfo
