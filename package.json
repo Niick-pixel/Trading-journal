@@ -41,5 +41,8 @@
     "directories": {
       "output": "release"
     }
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

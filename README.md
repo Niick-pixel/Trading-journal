@@ -8,10 +8,16 @@ It exists to expose **why** you take trades, not just what happened.
 
 ## Setup
 
+Requires **Node 20.9 or newer** (`node --version`).
+
 ```bash
 npm install
 npm run desktop      # opens Signature in its own window
 ```
+
+`npm install` downloads Electron (~230 MB) and builds `better-sqlite3` as a
+native module, so the first install is slow and needs a working network. Every
+run after that is offline.
 
 That's the normal way to run it. The Electron shell starts the local Next.js
 server on a free port, waits for it, and loads it into a frameless window — the
