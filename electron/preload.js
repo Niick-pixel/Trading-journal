@@ -1,0 +1,13 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+// The renderer gets exactly two things: a way to know it is running in the
+// desktop shell (so the UI can inset for the title bar), and menu navigation.
+contextBridge.exposeInMainWorld('signature', {
+  isDesktop: true,
+  platform: process.platform,
+  onNavigate: (handler) => {
+    const listener = (_event, route) => handler(route);
+    ipcRenderer.on('signature:navigate', listener);
+    return () => ipcRenderer.off('signature:navigate', listener);
+  },
+});

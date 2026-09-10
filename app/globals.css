@@ -1,0 +1,125 @@
+@import 'tailwindcss';
+
+/*
+  Signature's design tokens.
+
+  Dark is primary; light is supported through prefers-color-scheme. Colour is
+  rationed — surfaces stay near-monochrome and hue is reserved for three things
+  only: grade, outcome, and reason-cluster identity.
+*/
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+
+  --radius-control: 14px;
+  --radius-card: 24px;
+  --radius-panel: 28px;
+}
+
+:root {
+  color-scheme: dark;
+
+  --bg: #0a0a0c;
+  --bg-raised: #101014;
+  --text: #f2f2f5;
+  --text-dim: #8b8b93;
+  --text-faint: #5a5a63;
+
+  /* Liquid glass */
+  --glass-fill: rgba(255, 255, 255, 0.06);
+  --glass-fill-strong: rgba(255, 255, 255, 0.09);
+  --glass-stroke: rgba(255, 255, 255, 0.10);
+  /* The specular top edge — brighter than the rest of the stroke.
+     This single line is what sells the glass. */
+  --glass-specular: rgba(255, 255, 255, 0.28);
+  --glass-blur: blur(24px) saturate(180%);
+
+  /* Layered shadows: one tight and dark, one wide and soft. Never one flat. */
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 16px 48px -12px rgba(0, 0, 0, 0.65);
+  --shadow-panel:
+    0 2px 4px rgba(0, 0, 0, 0.6),
+    0 40px 96px -24px rgba(0, 0, 0, 0.8);
+
+  --accent: 122 162 255;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #ececed;
+    --bg-raised: #f6f6f7;
+    --text: #16161a;
+    --text-dim: #6a6a73;
+    --text-faint: #9a9aa3;
+
+    --glass-fill: rgba(255, 255, 255, 0.55);
+    --glass-fill-strong: rgba(255, 255, 255, 0.72);
+    --glass-stroke: rgba(0, 0, 0, 0.08);
+    --glass-specular: rgba(255, 255, 255, 0.95);
+
+    --shadow-card:
+      0 1px 2px rgba(0, 0, 0, 0.10),
+      0 16px 40px -12px rgba(0, 0, 0, 0.18);
+    --shadow-panel:
+      0 2px 6px rgba(0, 0, 0, 0.12),
+      0 40px 88px -24px rgba(0, 0, 0, 0.24);
+
+    --accent: 60 110 235;
+  }
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* the whiteboard owns its own scrolling */
+}
+
+/* Headings run tight; body runs generous. */
+h1, h2, h3 { letter-spacing: -0.022em; }
+
+/*
+  The glass recipe. `.glass` is the surface; the ::before is the specular edge,
+  drawn as a 1px inset highlight along the top border only.
+*/
+.glass {
+  position: relative;
+  background: var(--glass-fill);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--shadow-card);
+}
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(to bottom, var(--glass-specular), transparent 1px);
+  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The desktop shell hides the native title bar; keep content clear of it and
+   give the empty strip a drag region so the window still moves. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-drag button,
+.titlebar-drag a,
+.titlebar-drag input {
+  -webkit-app-region: no-drag;
+}

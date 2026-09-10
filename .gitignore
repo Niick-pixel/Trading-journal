@@ -2,6 +2,7 @@
 /data/
 
 node_modules/
+release/
 .next/
 out/
 build/
@@ -11,3 +12,7 @@ next-env.d.ts
 .DS_Store
 .env*.local
 .claude/
+
+# Next.js writes these on boot; next.config.ts disables them
+AGENTS.md
+CLAUDE.md
