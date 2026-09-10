@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { OUTCOMES, RUBRIC, type Outcome } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
-import { press, spring, springSoft } from '@/lib/motion';
+import { spring, springSoft } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from './TradeNode';
@@ -16,6 +17,23 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-baseline justify-between gap-4 py-1.5">
       <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{label}</span>
       <span className="text-right text-[12px]">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * A grouped surface for a run of rows. Two columns of label/value pairs sitting
+ * on bare background read as one long run-on list — the left column's values
+ * end up hard against the right column's labels. Grouping each column onto its
+ * own surface separates them by elevation instead of by a rule.
+ */
+function Group({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-[16px] px-4 py-2"
+      style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)' }}
+    >
+      {children}
     </div>
   );
 }
@@ -96,6 +114,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
             transition={spring}
             onClick={onClose}
             className="fixed inset-0 z-40"
+            // A modal scrim darkens in both themes — that is what makes the
+            // panel read as lifted off the board.
             style={{ background: 'rgba(0,0,0,0.68)', backdropFilter: 'blur(6px)' }}
           />
 
@@ -114,7 +134,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/screenshots/${trade.screenshot_path}`} alt="Chart"
-                className="max-h-[46vh] w-full object-contain" style={{ background: 'rgba(0,0,0,0.35)' }} />
+                className="max-h-[46vh] w-full object-contain" style={{ background: 'var(--letterbox)' }} />
 
               <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -152,34 +172,33 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   <Check on={trade.smt} label="SMT divergence" />
                 </div>
 
-                <div className="grid gap-x-16 sm:grid-cols-2">
-                  <div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Group>
                     <Row label="Setup" value={trade.setup_type} />
                     <Row label="HTF bias" value={trade.htf_bias} />
                     <Row label="Premium / discount" value={trade.premium_discount} />
                     <Row label="Target" value={trade.target_type} />
-                  </div>
-                  <div>
+                  </Group>
+                  <Group>
                     <Row label={RUBRIC.candle_strength.label} value={`${trade.candle_strength} / ${RUBRIC.candle_strength.max}`} />
                     <Row label={RUBRIC.inversion_speed.label} value={`${trade.inversion_speed} / ${RUBRIC.inversion_speed.max}`} />
                     <Row label={RUBRIC.risk_reward.label} value={`${trade.risk_reward} / ${RUBRIC.risk_reward.max}`} />
                     <Row label="Contracts / risk / stop"
                       value={`${trade.contracts ?? '—'} · $${trade.risk_dollars ?? '—'} · ${trade.stop_points ?? '—'}pt`} />
-                  </div>
+                  </Group>
                 </div>
 
-                <div className="mt-7 flex flex-wrap items-center gap-3 border-t pt-6"
-                  style={{ borderColor: 'var(--glass-stroke)' }}>
+                <div className="mt-10 flex flex-wrap items-center gap-3">
                   <AnimatePresence mode="wait">
                     {settling ? (
                       <motion.div key="settle" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }} transition={spring} className="flex flex-1 flex-wrap items-center gap-3">
                         <div className="w-44"><Select value={outcome} onChange={setOutcome} options={OUTCOMES} /></div>
-                        <input
+                        <Input
                           type="number" step="0.1" placeholder="R multiple" value={rMultiple}
                           onChange={(e) => setRMultiple(e.target.value)}
-                          className="glass w-32 rounded-[14px] px-3 py-2.5 text-[13px] outline-none"
-                          style={{ color: 'var(--text)' }}
+                          accent="var(--outcome-win)"
+                          className="w-32"
                         />
                         <Button variant="primary" accent="var(--outcome-win)" onClick={settle} disabled={busy}>
                           {busy ? 'Saving…' : 'Save'}
@@ -195,11 +214,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                           {trade.r_multiple != null && ` · ${trade.r_multiple > 0 ? '+' : ''}${trade.r_multiple.toFixed(1)}R`}
                         </span>
                         <Button onClick={() => setSettling(true)}>Settle outcome</Button>
-                        <a href={`/new?edit=${trade.id}`}>
-                          <motion.span whileTap={press} transition={spring}
-                            className="glass inline-block rounded-[14px] px-5 py-2.5 text-[13px] font-medium">
-                            Edit
-                          </motion.span>
+                        <a href={`/new?edit=${trade.id}`} className="outline-none">
+                          <Button tabIndex={-1}>Edit</Button>
                         </a>
                         <div className="ml-auto">
                           {confirmDelete ? (

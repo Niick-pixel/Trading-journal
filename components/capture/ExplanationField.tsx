@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { spring } from '@/lib/motion';
+import { useGlowState } from '@/components/ui/Field';
 import { MIN_EXPLANATION } from '@/lib/types';
 
 interface ExplanationFieldProps {
@@ -19,6 +20,7 @@ export function ExplanationField({
   value, onChange, placeholder, required = true, minRows = 4,
 }: ExplanationFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const glow = useGlowState();
 
   // Grow to fit content. Reset to auto first or the box can only ever get taller.
   useEffect(() => {
@@ -36,8 +38,8 @@ export function ExplanationField({
     <div>
       <motion.div
         className="glass overflow-hidden rounded-[18px]"
-        whileFocus={{ borderColor: 'rgb(var(--accent) / 0.5)' }}
-        transition={spring}
+        animate={glow.animate}
+        transition={glow.transition}
       >
         <textarea
           ref={ref}
@@ -45,6 +47,7 @@ export function ExplanationField({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={minRows}
+          {...glow.handlers}
           className="w-full resize-none bg-transparent px-4 py-3.5 text-[13px] leading-relaxed outline-none
             placeholder:text-[color:var(--text-faint)]"
           style={{ color: 'var(--text)' }}

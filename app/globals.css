@@ -119,6 +119,11 @@
   --cluster-tint-edge: 0.06;
   --cluster-stroke: 0.45;
   --cluster-glow: 0.28;
+  /* Behind a letterboxed chart. Charts are usually dark, but a black slab
+     reads as a bug on a light panel. */
+  --letterbox: rgba(0, 0, 0, 0.06);
+  --scrollbar: rgba(0, 0, 0, 0.22);
+  --scrollbar-hover: rgba(0, 0, 0, 0.34);
 }
 
 :root[data-theme='dark'] {
@@ -153,6 +158,9 @@
   --cluster-tint-edge: 0.03;
   --cluster-stroke: 0.30;
   --cluster-glow: 0.35;
+  --letterbox: rgba(0, 0, 0, 0.35);
+  --scrollbar: rgba(255, 255, 255, 0.16);
+  --scrollbar-hover: rgba(255, 255, 255, 0.26);
 }
 
 html, body {
@@ -197,6 +205,22 @@ body::before {
     radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.11), transparent 62%);
 }
 
+/* Scrollbars: thin, unobtrusive, and themed. The default chrome makes a glass
+   panel read like a web page instead of an app window. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); background-clip: content-box; }
+
 /* Headings run tight; body runs generous. */
 h1, h2, h3 { letter-spacing: -0.022em; }
 
@@ -215,15 +239,88 @@ h1, h2, h3 { letter-spacing: -0.022em; }
 .glass::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding-top: 1px;
-  background: linear-gradient(to bottom, var(--glass-specular), rgba(255, 255, 255, 0.04) 1.5px, transparent 40%);
-  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  mask-composite: exclude;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  /*
+    The specular top edge — a 1px highlight along the top border only, brighter
+    than the rest of the stroke. This one line is what sells the glass.
+
+    Drawn as a real 1px strip rather than a masked gradient: the mask-composite
+    approach silently failed to clip in Chromium and rendered as a wide band
+    down the top third of every card. Fading both ends keeps the line from
+    overshooting the rounded corners at any radius.
+  */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--glass-specular) 14%,
+    var(--glass-specular) 86%,
+    transparent
+  );
   pointer-events: none;
+  /*
+    Absolutely-positioned children — a trade node's screenshot and its scrim —
+    paint above a ::before sharing their auto z-index, which was erasing this
+    line on exactly the cards that most need it.
+  */
+  z-index: 3;
+}
+
+/*
+  The one native control the app keeps. Styled by hand because a range input
+  cannot be rebuilt in Framer Motion without losing keyboard and drag behaviour
+  that comes free here.
+*/
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--glass-fill-strong);
+  border: 1px solid var(--glass-stroke);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 10px rgb(var(--accent) / 0.55), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--glass-fill-strong);
+}
+input[type='range']::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 10px rgb(var(--accent) / 0.55);
+}
+
+/* Native date pickers: make the calendar glyph match the theme instead of
+   staying black on a dark surface. */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+  cursor: pointer;
+}
+:root[data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator,
+:root[data-theme='dark'] input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.55;
 }
 
 /* The desktop shell hides the native title bar; keep content clear of it and

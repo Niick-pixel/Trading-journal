@@ -6,9 +6,9 @@ import {
   type Edge, type Node, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { computeLayout, reasonAccent, NODE_H, NODE_W } from '@/lib/layout';
-import { spring } from '@/lib/motion';
+import { spring, springBouncy } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { ClusterNode } from './ClusterNode';
@@ -34,11 +34,11 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
   const onOpen = useCallback((id: string) => setOpenId(id), []);
 
   const nodes = useMemo<Node[]>(() => {
-    const clusterNodes: Node[] = layout.clusters.map((cluster) => ({
+    const clusterNodes: Node[] = layout.clusters.map((cluster, index) => ({
       id: `cluster-${cluster.reason}`,
       type: 'cluster',
       position: { x: cluster.x, y: cluster.y },
-      data: { cluster, accent: reasonAccent(cluster.reason) },
+      data: { cluster, accent: reasonAccent(cluster.reason), index },
       draggable: false,
       selectable: false,
       zIndex: 0,
@@ -111,16 +111,28 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
     return (
       <div className="grid h-full place-items-center">
         <motion.div
-          initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={spring} className="glass max-w-sm rounded-[24px] p-8 text-center"
+          initial={{ opacity: 0, y: 12, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={springBouncy} className="glass max-w-sm rounded-[28px] p-9 text-center"
         >
-          <h2 className="text-[17px] font-semibold">Nothing on the board yet</h2>
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            transition={{ ...springBouncy, delay: 0.08 }}
+            className="mx-auto mb-5 grid size-12 place-items-center rounded-[16px]"
+            style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-faint)' }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle cx="7" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.4" />
+              <circle cx="17.5" cy="15.5" r="3.2" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M9.6 9.8l5.4 4.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="2 2.4" />
+            </svg>
+          </motion.div>
+          <h2 className="text-[17px] font-semibold tracking-tight">Nothing on the board yet</h2>
           <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'var(--text-dim)' }}>
             Log a trade and it will appear here, clustered with every other trade you took
             for the same reason.
           </p>
-          <a href="/new" className="mt-6 inline-block">
-            <Button variant="primary">Log your first trade</Button>
+          <a href="/new" className="mt-7 inline-block outline-none">
+            <Button variant="primary" tabIndex={-1}>Log your first trade</Button>
           </a>
         </motion.div>
       </div>
@@ -148,6 +160,29 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
       >
         <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
       </ReactFlow>
+
+      {/* Filtering to nothing used to leave a blank canvas with no explanation. */}
+      <AnimatePresence>
+        {visible.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={spring}
+            className="pointer-events-none absolute inset-0 grid place-items-center"
+          >
+            <div className="glass pointer-events-auto rounded-[24px] px-7 py-6 text-center">
+              <p className="text-[14px] font-medium">No trades match these filters</p>
+              <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-dim)' }}>
+                {trades.length} trade{trades.length === 1 ? '' : 's'} are hidden.
+              </p>
+              <div className="mt-5">
+                <Button onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">
         <div className="pointer-events-auto flex max-w-full items-center gap-3">

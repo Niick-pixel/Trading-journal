@@ -9,16 +9,16 @@ export const NODE_H = 152;
 const GAP_X = 34;
 const GAP_Y = 30;
 const PAD = 30;
-const HEADER_H = 68;
+const HEADER_H = 96;
 const CLUSTER_GAP = 76;
 /** Clusters wrap onto a new row past this width. */
 const BOARD_W = 2100;
 /**
- * A one-trade cluster is only ~268px wide, which squeezes the reason label out
- * of its own header — and the label is the thing you are meant to read. Floor
- * the width at what the header actually needs.
+ * Floor for cluster width. With the header on two rows the label no longer
+ * competes with the stats, so this only has to fit the stats row — which is why
+ * it is narrower than it was when they shared a line.
  */
-const MIN_CLUSTER_W = 480;
+const MIN_CLUSTER_W = 430;
 
 /**
  * A stable pseudo-random number in [0,1) derived from a trade id.

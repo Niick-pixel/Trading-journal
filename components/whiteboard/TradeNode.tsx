@@ -58,7 +58,9 @@ function TradeNodeInner({ data }: NodeProps) {
         style={{ filter: passed ? 'grayscale(0.55) brightness(0.72)' : 'brightness(0.86)' }}
       />
 
-      {/* A scrim so the corner chips stay legible over any chart. */}
+      {/* A scrim so the corner chips stay legible over any chart. Fixed black
+          regardless of theme on purpose: it sits over the screenshot, not over
+          the page, and chart images are dark in both themes. */}
       <div className="absolute inset-0"
         style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.12) 46%, rgba(0,0,0,0.34) 100%)' }} />
 

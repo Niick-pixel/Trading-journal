@@ -7,7 +7,7 @@ import { gradeLetter } from '@/lib/grade';
 import { springLayout } from '@/lib/motion';
 import type { PositionedCluster } from '@/lib/layout';
 
-export type ClusterNodeData = { cluster: PositionedCluster; accent: string };
+export type ClusterNodeData = { cluster: PositionedCluster; accent: string; index: number };
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -30,7 +30,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
  * face every time the app opens.
  */
 function ClusterNodeInner({ data }: NodeProps) {
-  const { cluster, accent } = data as unknown as ClusterNodeData;
+  const { cluster, accent, index } = data as unknown as ClusterNodeData;
   const { stats } = cluster;
 
   const rTone = stats.totalR > 0 ? 'var(--outcome-win)' : stats.totalR < 0 ? 'var(--outcome-loss)' : null;
@@ -38,7 +38,13 @@ function ClusterNodeInner({ data }: NodeProps) {
   return (
     <motion.div
       layout
-      transition={springLayout}
+      // Regions settle in worst-first, which is also the order you should read
+      // them. The trade nodes deliberately have no entrance of their own: they
+      // share a layoutId with the detail panel, and a competing initial state
+      // breaks that transition.
+      initial={{ opacity: 0, scale: 0.97, y: 6 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ ...springLayout, delay: Math.min(index, 8) * 0.045 }}
       style={{
         width: cluster.width,
         height: cluster.height,
@@ -48,18 +54,21 @@ function ClusterNodeInner({ data }: NodeProps) {
       }}
       className="pointer-events-none rounded-[30px] border backdrop-blur-[2px]"
     >
-      <div className="flex items-end justify-between gap-5 px-7 pt-5">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="size-2 shrink-0 rounded-full"
-              style={{ background: `rgb(${accent})`, boxShadow: `0 0 10px rgb(${accent})` }} />
-            <h2 className="truncate text-[14px] font-semibold tracking-tight" style={{ color: `rgb(${accent})` }}>
-              {cluster.reason}
-            </h2>
-          </div>
+      {/*
+        Two rows, not one. Sharing a row meant the stats squeezed the reason
+        label until it truncated to an ellipsis — and the label is the single
+        most important word on the region. Now neither can crowd the other.
+      */}
+      <div className="px-7 pt-4">
+        <div className="flex items-center gap-2">
+          <span className="size-2 shrink-0 rounded-full"
+            style={{ background: `rgb(${accent})`, boxShadow: `0 0 10px rgb(${accent})` }} />
+          <h2 className="text-[14px] font-semibold tracking-tight" style={{ color: `rgb(${accent})` }}>
+            {cluster.reason}
+          </h2>
         </div>
 
-        <div className="flex shrink-0 items-end gap-4">
+        <div className="mt-2.5 flex flex-wrap items-end gap-x-5 gap-y-2">
           <Stat label="Trades" value={String(stats.count)} />
           <Stat label="Win rate" value={stats.winRate == null ? '—' : `${Math.round(stats.winRate * 100)}%`} />
           <Stat

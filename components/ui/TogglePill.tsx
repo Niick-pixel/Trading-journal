@@ -37,7 +37,9 @@ export function TogglePill({ checked, onChange, label, hint, accent = 'var(--gra
         <motion.span
           className="absolute inset-0 rounded-full"
           animate={{
-            background: checked ? `rgb(${accent} / 0.22)` : 'rgba(255,255,255,0.06)',
+            // White at 6% is invisible on a light glass surface; the token
+            // resolves per theme.
+            background: checked ? `rgb(${accent} / 0.22)` : 'var(--glass-fill-strong)',
             scale: checked ? 1 : 0.85,
           }}
           transition={springBouncy}

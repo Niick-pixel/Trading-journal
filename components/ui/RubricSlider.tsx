@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { press, spring, springBouncy } from '@/lib/motion';
 
@@ -13,12 +14,13 @@ interface RubricSliderProps {
 }
 
 /**
- * A segmented slider: one tappable segment per score, with the filled bar
- * sliding on a spring. Discrete rubric scores deserve discrete controls — a
- * continuous range input would imply precision the rubric doesn't have.
+ * A segmented slider: one tappable segment per score, each filling on a spring.
+ * Discrete rubric scores deserve discrete controls — a continuous range input
+ * would imply a precision the rubric doesn't have.
  */
 export function RubricSlider({ label, hint, value, max, onChange, accent = 'var(--accent)' }: RubricSliderProps) {
   const steps = Array.from({ length: max + 1 }, (_, i) => i);
+  const [focused, setFocused] = useState(false);
 
   return (
     <div>
@@ -39,7 +41,7 @@ export function RubricSlider({ label, hint, value, max, onChange, accent = 'var(
         </motion.span>
       </div>
 
-      <div
+      <motion.div
         role="slider"
         aria-label={label}
         aria-valuenow={value}
@@ -50,8 +52,16 @@ export function RubricSlider({ label, hint, value, max, onChange, accent = 'var(
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onChange(Math.min(max, value + 1)); }
           if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onChange(Math.max(0, value - 1)); }
         }}
-        className="flex gap-1.5 rounded-full outline-none focus-visible:ring-2"
-        style={{ ['--tw-ring-color' as string]: `rgb(${accent} / 0.5)` }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        // The focus ring springs like everything else rather than snapping on.
+        animate={{
+          boxShadow: focused
+            ? `0 0 0 2px rgb(${accent} / 0.45), 0 0 18px rgb(${accent} / 0.22)`
+            : `0 0 0 0px rgb(${accent} / 0), 0 0 0px rgb(${accent} / 0)`,
+        }}
+        transition={spring}
+        className="flex gap-1.5 rounded-full outline-none"
       >
         {steps.map((step) => {
           const filled = step <= value;
@@ -62,6 +72,7 @@ export function RubricSlider({ label, hint, value, max, onChange, accent = 'var(
               aria-label={`${label} ${step}`}
               onClick={() => onChange(step)}
               whileTap={press}
+              whileHover={{ scaleY: 1.5 }}
               animate={{
                 background: filled ? `rgb(${accent} / ${0.35 + (step / max) * 0.55})` : 'var(--glass-fill)',
                 boxShadow: filled ? `0 0 14px rgb(${accent} / 0.35)` : '0 0 0 rgb(0 0 0 / 0)',
@@ -72,7 +83,7 @@ export function RubricSlider({ label, hint, value, max, onChange, accent = 'var(
             />
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }

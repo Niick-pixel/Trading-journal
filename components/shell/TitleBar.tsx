@@ -39,18 +39,25 @@ export function TitleBar() {
         {TABS.map((tab) => {
           const active = pathname === tab.href;
           return (
-            <Link key={tab.href} href={tab.href} className="relative rounded-full px-3.5 py-1.5 text-[12px] font-medium"
-              style={{ color: active ? 'var(--text)' : 'var(--text-faint)' }}>
-              {active && (
-                <motion.span
-                  layoutId="titlebar-tab"
-                  transition={spring}
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: 'var(--glass-fill-strong)', border: '1px solid var(--glass-stroke)' }}
-                />
-              )}
-              <span className="relative">{tab.label}</span>
-            </Link>
+            <motion.div key={tab.href} whileTap={press} transition={spring}>
+              <Link
+                href={tab.href}
+                className="relative block rounded-full px-3.5 py-1.5 text-[12px] font-medium outline-none"
+                style={{ color: active ? 'var(--text)' : 'var(--text-faint)' }}
+              >
+                {active && (
+                  // A shared layoutId means the pill slides between tabs on a
+                  // spring instead of cross-fading.
+                  <motion.span
+                    layoutId="titlebar-tab"
+                    transition={spring}
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: 'var(--glass-fill-strong)', border: '1px solid var(--glass-stroke)' }}
+                  />
+                )}
+                <span className="relative">{tab.label}</span>
+              </Link>
+            </motion.div>
           );
         })}
       </nav>

@@ -3,7 +3,8 @@
 import { motion } from 'framer-motion';
 import { OUTCOMES, SESSIONS, type Outcome, type Session } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
-import { press, spring } from '@/lib/motion';
+import { press, spring, springBouncy } from '@/lib/motion';
+import { useGlowState } from '@/components/ui/Field';
 import { OUTCOME_COLOR } from './TradeNode';
 
 export interface Filters {
@@ -30,6 +31,27 @@ export function applyFilters(filters: Filters) {
     if (t.grade_total < filters.minGrade) return false;
     return true;
   };
+}
+
+/** A date input on the same glass-and-glow footing as everything else. */
+function DateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const glow = useGlowState();
+  return (
+    <motion.div
+      animate={glow.animate}
+      transition={glow.transition}
+      className="glass overflow-hidden rounded-[11px]"
+    >
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        {...glow.handlers}
+        className="bg-transparent px-2 py-1 text-[11px] outline-none"
+        style={{ color: value ? 'var(--text)' : 'var(--text-faint)' }}
+      />
+    </motion.div>
+  );
 }
 
 function Chip({
@@ -83,25 +105,31 @@ export function Toolbar({
         ))}
       </div>
 
-      <label className="flex items-center gap-2">
+      <label className="flex items-center gap-2.5">
         <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
-          Grade ≥ <span className="tabular-nums" style={{ color: 'var(--text-dim)' }}>{filters.minGrade}</span>
+          Grade ≥
         </span>
+        <motion.span
+          key={filters.minGrade}
+          initial={{ scale: 0.7, opacity: 0.5 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={springBouncy}
+          className="w-3 tabular-nums text-[11px] font-semibold"
+          style={{ color: filters.minGrade > 0 ? 'rgb(var(--accent))' : 'var(--text-dim)' }}
+        >
+          {filters.minGrade}
+        </motion.span>
         <input
           type="range" min={0} max={GRADE_MAX} value={filters.minGrade}
           onChange={(e) => onChange({ ...filters, minGrade: Number(e.target.value) })}
-          className="w-20 accent-[rgb(var(--accent))]"
+          className="w-20"
         />
       </label>
 
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Dates</span>
-        <input type="date" value={filters.from} onChange={(e) => onChange({ ...filters, from: e.target.value })}
-          className="rounded-lg border px-2 py-1 text-[11px]"
-          style={{ borderColor: 'var(--glass-stroke)', background: 'transparent', color: 'var(--text-dim)' }} />
-        <input type="date" value={filters.to} onChange={(e) => onChange({ ...filters, to: e.target.value })}
-          className="rounded-lg border px-2 py-1 text-[11px]"
-          style={{ borderColor: 'var(--glass-stroke)', background: 'transparent', color: 'var(--text-dim)' }} />
+        <DateField value={filters.from} onChange={(from) => onChange({ ...filters, from })} />
+        <DateField value={filters.to} onChange={(to) => onChange({ ...filters, to })} />
       </div>
 
       <div className="ml-auto flex items-center gap-3">
