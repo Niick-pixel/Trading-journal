@@ -28,6 +28,109 @@ export interface Aggregate {
   avgGrade: number | null;
 }
 
+/**
+ * Money, derived rather than stored.
+ *
+ * A trade records what it risked and what it returned in R, so dollars are
+ * risk_dollars x r_multiple. Trades with no risk recorded contribute nothing
+ * to the money figures but still count everywhere else — which is why the
+ * dollar totals carry their own `priced` count, so a half-filled journal
+ * cannot quietly look like a small one.
+ */
+export interface Money {
+  /** Trades that recorded both a risk and an R multiple. */
+  priced: number;
+  won: number;
+  lost: number;
+  net: number;
+  totalRisked: number;
+  biggestWin: number;
+  biggestLoss: number;
+}
+
+export function money(trades: Trade[]): Money {
+  let won = 0;
+  let lost = 0;
+  let totalRisked = 0;
+  let priced = 0;
+  let biggestWin = 0;
+  let biggestLoss = 0;
+
+  for (const t of trades) {
+    if (!isTaken(t.outcome) || t.risk_dollars == null || t.r_multiple == null) continue;
+    priced += 1;
+    totalRisked += t.risk_dollars;
+    const pnl = t.risk_dollars * t.r_multiple;
+    if (pnl >= 0) {
+      won += pnl;
+      biggestWin = Math.max(biggestWin, pnl);
+    } else {
+      lost += Math.abs(pnl);
+      biggestLoss = Math.max(biggestLoss, Math.abs(pnl));
+    }
+  }
+
+  return { priced, won, lost, net: won - lost, totalRisked, biggestWin, biggestLoss };
+}
+
+export interface Edge {
+  /** Sum of every positive R. */
+  rWon: number;
+  /** Sum of every negative R, as a positive number. */
+  rLost: number;
+  avgWinR: number | null;
+  avgLossR: number | null;
+  /** Average R per trade taken — the number that decides whether this works. */
+  expectancy: number | null;
+  /** Gross R won divided by gross R lost. Above 1 is a living. */
+  profitFactor: number | null;
+  bestR: number | null;
+  worstR: number | null;
+  longestWinStreak: number;
+  longestLossStreak: number;
+}
+
+export function edge(trades: Trade[]): Edge {
+  const taken = trades.filter((t) => isTaken(t.outcome) && t.r_multiple != null);
+  const wins = taken.filter((t) => (t.r_multiple as number) > 0);
+  const losses = taken.filter((t) => (t.r_multiple as number) < 0);
+
+  const rWon = wins.reduce((sum, t) => sum + (t.r_multiple as number), 0);
+  const rLost = Math.abs(losses.reduce((sum, t) => sum + (t.r_multiple as number), 0));
+
+  // Streaks run in the order the trades happened, oldest first.
+  const chronological = [...taken].sort((a, b) => a.date.localeCompare(b.date));
+  let winStreak = 0;
+  let lossStreak = 0;
+  let longestWinStreak = 0;
+  let longestLossStreak = 0;
+  for (const t of chronological) {
+    if (t.outcome === 'Win') {
+      winStreak += 1; lossStreak = 0;
+      longestWinStreak = Math.max(longestWinStreak, winStreak);
+    } else if (t.outcome === 'Loss') {
+      lossStreak += 1; winStreak = 0;
+      longestLossStreak = Math.max(longestLossStreak, lossStreak);
+    } else {
+      winStreak = 0; lossStreak = 0;
+    }
+  }
+
+  const rs = taken.map((t) => t.r_multiple as number);
+  return {
+    rWon,
+    rLost,
+    avgWinR: wins.length ? rWon / wins.length : null,
+    avgLossR: losses.length ? rLost / losses.length : null,
+    expectancy: taken.length ? (rWon - rLost) / taken.length : null,
+    profitFactor: rLost > 0 ? rWon / rLost : null,
+    bestR: rs.length ? Math.max(...rs) : null,
+    worstR: rs.length ? Math.min(...rs) : null,
+    longestWinStreak,
+    longestLossStreak,
+  };
+}
+
 export function aggregate(trades: Trade[]): Aggregate {
   const taken = trades.filter((t) => isTaken(t.outcome));
   const wins = taken.filter((t) => t.outcome === 'Win').length;
@@ -87,6 +190,36 @@ export function byGradeBucket(trades: Trade[]): Group<string>[] {
     const ts = trades.filter((t) => bucket.test(t.grade_total));
     return { key: bucket.label as string, trades: ts, stats: aggregate(ts) };
   }).filter((g) => g.trades.length > 0);
+}
+
+/** Generic grouping by any string field, dropping empty buckets. */
+export function groupByField<K extends string>(
+  trades: Trade[],
+  key: (t: Trade) => K,
+  keys: readonly K[],
+): Group<K>[] {
+  return [...groupBy(trades, key, keys)]
+    .filter(([, ts]) => ts.length > 0)
+    .map(([k, ts]) => ({ key: k, trades: ts, stats: aggregate(ts) }));
+}
+
+/**
+ * What is actually costing you: reasons ranked by total R lost, counting only
+ * the losing trades. Distinct from "R by reason", which nets wins against
+ * losses and can hide a reason that both makes and loses a great deal.
+ */
+export function losingReasons(trades: Trade[]): Array<{ reason: Reason; losses: number; rLost: number }> {
+  const out = new Map<Reason, { losses: number; rLost: number }>();
+  for (const t of trades) {
+    if (t.outcome !== 'Loss') continue;
+    const entry = out.get(t.reason) ?? { losses: 0, rLost: 0 };
+    entry.losses += 1;
+    entry.rLost += Math.abs(t.r_multiple ?? 0);
+    out.set(t.reason, entry);
+  }
+  return [...out]
+    .map(([reason, v]) => ({ reason, ...v }))
+    .sort((a, b) => b.rLost - a.rLost || b.losses - a.losses);
 }
 
 export function byMacroTime(trades: Trade[]): Group<'Inside macro' | 'Outside macro'>[] {

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
-import { getTrade } from '@/db/trades';
+import { getTrade, listTrades } from '@/db/trades';
 import { NewTradeForm } from '@/components/capture/NewTradeForm';
+import { Whiteboard } from '@/components/whiteboard/Whiteboard';
 import { TitleBar } from '@/components/shell/TitleBar';
 
 export const dynamic = 'force-dynamic';
@@ -15,12 +16,33 @@ export default async function NewTradePage({
   const trade = edit ? getTrade(edit) : null;
   if (edit && !trade) notFound();
 
+  const trades = listTrades();
+
   return (
-    <div className="flex h-dvh flex-col">
-      <TitleBar />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[42rem] px-6 pb-20 pt-4">
-          <NewTradeForm trade={trade ?? undefined} />
+    <div className="relative h-dvh overflow-hidden">
+      {/*
+        The board stays behind the capture form, blurred and inert. Replacing it
+        with a blank page made logging a trade feel like leaving the app; this
+        way the thing you are adding to is still visibly there.
+      */}
+      {trades.length > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 select-none"
+          style={{ filter: 'blur(18px) saturate(0.85)', opacity: 0.5, transform: 'scale(1.04)' }}
+        >
+          <div className="h-dvh pt-11">
+            <Whiteboard trades={trades} readOnly />
+          </div>
+        </div>
+      )}
+
+      <div className="relative flex h-dvh flex-col">
+        <TitleBar />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[42rem] px-6 pb-20 pt-4">
+            <NewTradeForm trade={trade ?? undefined} />
+          </div>
         </div>
       </div>
     </div>

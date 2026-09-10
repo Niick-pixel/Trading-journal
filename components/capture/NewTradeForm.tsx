@@ -14,11 +14,12 @@ import { spring, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
 import { MIN_EXPLANATION, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
-import { Disclosure } from '@/components/ui/Disclosure';
 import { Field, Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
 import { RubricSlider } from '@/components/ui/RubricSlider';
+import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
+import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
 import { TogglePill } from '@/components/ui/TogglePill';
 import { ExplanationField } from './ExplanationField';
 import { ScreenshotDropzone } from './ScreenshotDropzone';
@@ -136,7 +137,19 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       </div>
 
       <div className="space-y-8">
-        {/* 1 — the chart, first. */}
+        {/* 1 — how it ended. You already know this before you start typing, and
+            burying it behind a disclosure made it the last thing recorded. */}
+        <Field label="How did it end">
+          <Segmented
+            value={outcome}
+            onChange={setOutcome}
+            options={OUTCOMES}
+            accentFor={(o) => OUTCOME_COLOR[o]}
+            labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
+          />
+        </Field>
+
+        {/* 2 — the chart. */}
         <ScreenshotDropzone
           file={file}
           onFile={setFile}
@@ -203,8 +216,14 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           </div>
         </div>
 
-        {/* 6 — everything else. */}
-        <Disclosure label="Details">
+        {/* 6 — the rest. Not hidden behind a disclosure any more: every one of
+            these is part of the record, and a collapsed section is a section
+            that quietly stays empty. */}
+        <div>
+          <span className="mb-4 block text-[11px] font-medium uppercase tracking-[0.07em]"
+            style={{ color: 'var(--text-faint)' }}>
+            Details
+          </span>
           <div className="space-y-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date & time">
@@ -241,7 +260,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Outcome"><Select value={outcome} onChange={setOutcome} options={OUTCOMES} /></Field>
               <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
                 <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
                   value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
@@ -262,7 +280,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                 placeholder="What would you do differently?" />
             </Field>
           </div>
-        </Disclosure>
+        </div>
       </div>
 
       <div className="mt-9 flex items-center justify-between gap-5">

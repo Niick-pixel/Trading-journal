@@ -18,10 +18,16 @@ export const OUTCOME_COLOR: Record<Outcome, string> = {
   'Not taken': 'var(--outcome-passed)',
 };
 
-export type TradeNodeData = { trade: Trade; selected: boolean; onOpen: (id: string) => void };
+export type TradeNodeData = {
+  trade: Trade;
+  selected: boolean;
+  onOpen: (id: string) => void;
+  scale: number;
+  dimPassed: boolean;
+};
 
 function TradeNodeInner({ data }: NodeProps) {
-  const { trade, selected, onOpen } = data as unknown as TradeNodeData;
+  const { trade, selected, onOpen, scale = 1, dimPassed = true } = data as unknown as TradeNodeData;
   const outcome = OUTCOME_COLOR[trade.outcome];
   const grade = GRADE_COLOR[gradeLetter(trade.grade_total)];
   const passed = trade.outcome === 'Not taken';
@@ -35,19 +41,47 @@ function TradeNodeInner({ data }: NodeProps) {
       whileTap={{ scale: 0.985 }}
       onClick={() => onOpen(trade.id)}
       style={{
-        width: NODE_W,
-        height: NODE_H,
+        width: NODE_W * scale,
+        height: NODE_H * scale,
         borderColor: `rgb(${outcome} / ${passed ? 0.35 : 0.65})`,
         boxShadow: selected
           ? `var(--shadow-panel), 0 0 34px rgb(${outcome} / 0.5)`
           : `var(--shadow-card), 0 0 16px rgb(${outcome} / 0.16)`,
-        opacity: passed ? 0.62 : 1,
+        opacity: passed && dimPassed ? 0.62 : 1,
       }}
-      className="glass relative cursor-pointer overflow-hidden rounded-[18px]"
+      className="group glass relative cursor-pointer overflow-hidden rounded-[18px]"
     >
       {/* React Flow needs handles to anchor edges, but they must not be seen. */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
+
+      {/*
+        The only place the card can be dragged from.
+        With the whole card draggable, opening a trade and nudging it out of its
+        cluster were the same gesture, and the board drifted just from being
+        read. Clicking anywhere still opens the detail panel; moving it takes a
+        deliberate grab here.
+      */}
+      <div
+        className="signature-drag-handle absolute left-1.5 top-1.5 z-10 grid size-6 cursor-grab
+          place-items-center rounded-[8px] opacity-0 transition-opacity active:cursor-grabbing
+          group-hover:opacity-100"
+        title="Drag to move"
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          background: 'rgba(10,10,12,0.55)',
+          backdropFilter: 'blur(6px)',
+          border: '1px solid rgba(255,255,255,0.16)',
+        }}
+      >
+        <svg width="9" height="11" viewBox="0 0 9 11" fill="none" aria-hidden>
+          <g fill="rgba(255,255,255,0.75)">
+            <circle cx="2" cy="1.6" r="1" /><circle cx="7" cy="1.6" r="1" />
+            <circle cx="2" cy="5.5" r="1" /><circle cx="7" cy="5.5" r="1" />
+            <circle cx="2" cy="9.4" r="1" /><circle cx="7" cy="9.4" r="1" />
+          </g>
+        </svg>
+      </div>
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -55,7 +89,7 @@ function TradeNodeInner({ data }: NodeProps) {
         alt=""
         draggable={false}
         className="absolute inset-0 size-full object-cover"
-        style={{ filter: passed ? 'grayscale(0.55) brightness(0.72)' : 'brightness(0.86)' }}
+        style={{ filter: passed && dimPassed ? 'grayscale(0.55) brightness(0.72)' : 'brightness(0.86)' }}
       />
 
       {/* A scrim so the corner chips stay legible over any chart. Fixed black

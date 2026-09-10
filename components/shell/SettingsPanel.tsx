@@ -4,18 +4,35 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, spring, springSoft } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { TogglePill } from '@/components/ui/TogglePill';
+import { usePreferences } from './PreferencesProvider';
+import type { Preferences } from '@/lib/preferences';
 
 interface Info {
   dataDir: string;
   trades: number;
-  oldest: string | null;
 }
 
-/**
- * Deliberately small. The only setting that matters in a local-only app is
- * where your data is — so this tells you, and offers to open the folder.
- */
+const TEXT_SIZES = ['Small', 'Normal', 'Large', 'Huge'] as const;
+const TEXT_SCALE: Record<(typeof TEXT_SIZES)[number], number> = {
+  Small: 0.9, Normal: 1, Large: 1.15, Huge: 1.3,
+};
+const DENSITIES = ['compact', 'normal', 'roomy'] as const;
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-5">
+      <div className="mb-2.5 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { prefs, update, reset } = usePreferences();
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -30,6 +47,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const currentSize = (Object.keys(TEXT_SCALE) as (typeof TEXT_SIZES)[number][])
+    .find((k) => TEXT_SCALE[k] === prefs.textScale) ?? 'Normal';
+
   return (
     <AnimatePresence>
       {open && (
@@ -37,36 +57,83 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={spring} onClick={onClose}
-            className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.35)' }}
+            className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)' }}
           />
           <motion.div
             initial={{ opacity: 0, y: 12, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={springSoft}
-            style={{ transformOrigin: 'bottom left' }}
-            className="glass absolute bottom-full left-0 z-50 mb-3 w-[22rem] rounded-[22px] p-5"
+            style={{
+              transformOrigin: 'bottom left',
+              background: 'color-mix(in srgb, var(--bg-raised) 92%, transparent)',
+            }}
+            className="glass absolute bottom-full left-0 z-50 mb-3 max-h-[78vh] w-[24rem]
+              overflow-y-auto rounded-[22px] p-5"
           >
             <h2 className="text-[14px] font-semibold tracking-tight">Settings</h2>
 
-            <div className="mt-4">
-              <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
-                Your journal lives here
+            <Section title="Text size">
+              <Segmented
+                value={currentSize}
+                onChange={(size) => update({ textScale: TEXT_SCALE[size] })}
+                options={TEXT_SIZES}
+              />
+            </Section>
+
+            <Section title="Whiteboard">
+              <Segmented
+                value={prefs.boardDensity}
+                onChange={(boardDensity) => update({ boardDensity })}
+                options={DENSITIES}
+                labelFor={(d) => d[0].toUpperCase() + d.slice(1)}
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <TogglePill
+                  checked={prefs.showReasonEdges}
+                  onChange={(showReasonEdges) => update({ showReasonEdges })}
+                  label="Reason lines"
+                  hint="Dotted lines joining trades taken for the same reason."
+                />
+                <TogglePill
+                  checked={prefs.showLeakEdges}
+                  onChange={(showLeakEdges) => update({ showLeakEdges })}
+                  label="Leak lines"
+                  accent="var(--outcome-loss)"
+                  hint="Dashed lines joining losses that share a target type."
+                />
+                <TogglePill
+                  checked={prefs.showGrid}
+                  onChange={(showGrid) => update({ showGrid })}
+                  label="Dot grid"
+                />
+                <TogglePill
+                  checked={prefs.dimPassed}
+                  onChange={(dimPassed) => update({ dimPassed })}
+                  label="Fade passed trades"
+                />
               </div>
-              <p className="mt-1.5 break-all rounded-[12px] p-2.5 text-[11px] leading-relaxed"
+            </Section>
+
+            <Section title="Motion">
+              <TogglePill
+                checked={prefs.reduceMotion}
+                onChange={(reduceMotion) => update({ reduceMotion })}
+                label="Reduce motion"
+                hint="Turns off the spring animations."
+              />
+            </Section>
+
+            <Section title="Your journal lives here">
+              <p className="break-all rounded-[12px] p-2.5 text-[11px] leading-relaxed"
                 style={{ background: 'var(--glass-fill)', border: '1px solid var(--glass-stroke)' }}>
                 {info?.dataDir ?? 'Loading…'}
               </p>
               <p className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                Back up that one folder and you have backed up everything — the database
-                and every chart screenshot.
+                Back up that one folder and you have backed up everything — the database and
+                every chart screenshot. {info ? `${info.trades} trade${info.trades === 1 ? '' : 's'} recorded.` : ''}
               </p>
-            </div>
-
-            <div className="mt-4 flex items-baseline justify-between text-[12px]">
-              <span style={{ color: 'var(--text-faint)' }}>Trades recorded</span>
-              <span className="tabular-nums font-semibold">{info?.trades ?? '—'}</span>
-            </div>
+            </Section>
 
             <div className="mt-5 flex flex-wrap gap-2">
               {typeof window !== 'undefined' && window.signature?.isDesktop && (
@@ -84,6 +151,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               >
                 {copied ? 'Copied' : 'Copy path'}
               </Button>
+              <Button onClick={reset}>Reset</Button>
               <Button onClick={onClose} className="ml-auto">Done</Button>
             </div>
           </motion.div>
@@ -98,31 +166,31 @@ export function BottomLeftControls({ children }: { children: React.ReactNode }) 
   const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <div className="fixed bottom-4 left-4 z-30 flex flex-col items-start gap-2">
-        <SettingsPanel open={open} onClose={() => setOpen(false)} />
-        {children}
-        <motion.button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          whileTap={press}
-          whileHover={{ y: -1 }}
-          transition={spring}
-          aria-label="Settings"
-          title="Settings"
-          className="glass grid size-[34px] place-items-center rounded-full"
-          style={{ color: 'var(--text-dim)' }}
-        >
-          {/* Sliders, not a cog. A spoked circle sits directly above the sun of
-              the theme toggle and reads as a second one. */}
-          <motion.svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden
-            animate={{ rotate: open ? 90 : 0 }} transition={spring}>
-            <path d="M3 6h5M12 6h5M3 14h9M16 14h1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            <circle cx="10" cy="6" r="2" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="14" cy="14" r="2" stroke="currentColor" strokeWidth="1.6" />
-          </motion.svg>
-        </motion.button>
-      </div>
-    </>
+    <div className="fixed bottom-4 left-4 z-30 flex flex-col items-start gap-2">
+      <SettingsPanel open={open} onClose={() => setOpen(false)} />
+      {children}
+      <motion.button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        whileTap={press}
+        whileHover={{ y: -1 }}
+        transition={spring}
+        aria-label="Settings"
+        title="Settings"
+        className="glass grid size-[34px] place-items-center rounded-full"
+        style={{ color: 'var(--text-dim)' }}
+      >
+        {/* Sliders, not a cog: a spoked circle sits directly above the sun of
+            the theme toggle and reads as a second one. */}
+        <motion.svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden
+          animate={{ rotate: open ? 90 : 0 }} transition={spring}>
+          <path d="M3 6h5M12 6h5M3 14h9M16 14h1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="10" cy="6" r="2" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="14" cy="14" r="2" stroke="currentColor" strokeWidth="1.6" />
+        </motion.svg>
+      </motion.button>
+    </div>
   );
 }
+
+export type { Preferences };

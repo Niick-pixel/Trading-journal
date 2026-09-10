@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { BottomLeftControls } from '@/components/shell/SettingsPanel';
+import { PreferencesProvider } from '@/components/shell/PreferencesProvider';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 
 export const metadata: Metadata = {
@@ -30,11 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body>
-        {children}
-        {/* Theme above settings, bottom-left, on every screen. */}
-        <BottomLeftControls>
-          <ThemeToggle />
-        </BottomLeftControls>
+        <PreferencesProvider>
+          {children}
+          {/* Theme above settings, bottom-left, on every screen. */}
+          <BottomLeftControls>
+            <ThemeToggle />
+          </BottomLeftControls>
+        </PreferencesProvider>
       </body>
     </html>
   );

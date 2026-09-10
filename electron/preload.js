@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('signature', {
   isDesktop: true,
   platform: process.platform,
+  /** Repaints the window-button strip when the theme changes. */
+  setTitleBarTheme: (theme) => ipcRenderer.send('signature:titlebar-theme', theme),
   /** Opens the journal folder in the OS file browser. */
   openDataFolder: () => ipcRenderer.invoke('signature:open-data-folder'),
   onNavigate: (handler) => {

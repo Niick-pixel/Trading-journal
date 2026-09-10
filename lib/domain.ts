@@ -21,7 +21,32 @@ export const REASONS = [
   'News reaction',
 ] as const;
 
-export const SETUP_TYPES = ['iFVG', 'MSS + FVG', 'Order Block', 'Propulsion Block', 'Breaker', 'Other'] as const;
+/**
+ * Setup vocabulary, iFVG-first.
+ *
+ * These are the standard names in the iFVG / ICT family rather than any one
+ * trader's private taxonomy — tell me the exact list you work from and I will
+ * match it. Adding a value means a migration, because SQLite cannot alter a
+ * CHECK constraint in place: see 003_setup_types.sql for the pattern.
+ */
+export const SETUP_TYPES = [
+  'iFVG',
+  'Double iFVG',
+  'iFVG + SMT',
+  'MSS + FVG',
+  'CISD',
+  'Order Block',
+  'Breaker',
+  'Unicorn (Breaker + FVG)',
+  'Propulsion Block',
+  'Mitigation Block',
+  'Rejection Block',
+  'Liquidity Void',
+  'Balanced Price Range',
+  'Turtle Soup',
+  'Silver Bullet',
+  'Other',
+] as const;
 export const HTF_BIASES = ['With bias', 'Against bias', 'No bias defined'] as const;
 export const PREMIUM_DISCOUNTS = ['Discount', 'Equilibrium', 'Premium'] as const;
 export const TARGET_TYPES = [

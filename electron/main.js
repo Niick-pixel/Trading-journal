@@ -159,7 +159,7 @@ function createWindow(port) {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     titleBarOverlay: process.platform === 'darwin'
       ? undefined
-      : { color: SHELL_BG, symbolColor: '#5c5c66', height: 44 },
+      : { ...TITLE_BAR.light, height: 44 },
     trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 20 } : undefined,
     show: false,
     webPreferences: {
@@ -188,6 +188,26 @@ function createWindow(port) {
   mainWindow.loadURL(`http://127.0.0.1:${port}`);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+/**
+ * Windows and Linux draw their window buttons onto a strip we colour ourselves.
+ * Set once at creation it stays light forever, so switching the app to dark
+ * left a white slab in the corner. The renderer tells us when the theme flips.
+ */
+const TITLE_BAR = {
+  light: { color: '#ececed', symbolColor: '#5c5c66' },
+  dark: { color: '#08080b', symbolColor: '#8b8b93' },
+};
+
+ipcMain.on('signature:titlebar-theme', (_event, theme) => {
+  if (process.platform === 'darwin' || !mainWindow || mainWindow.isDestroyed()) return;
+  const palette = TITLE_BAR[theme === 'dark' ? 'dark' : 'light'];
+  try {
+    mainWindow.setTitleBarOverlay({ ...palette, height: 44 });
+  } catch {
+    /* not every platform supports a title bar overlay */
+  }
+});
 
 // The Settings panel offers to reveal the journal folder; only the main
 // process can talk to the OS file browser.

@@ -62,14 +62,16 @@ export interface BoardLayout {
   leakEdges: Array<[string, string]>;
 }
 
-function clusterGrid(count: number) {
+function clusterGrid(count: number, scale: number) {
   const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
   const rows = Math.ceil(count / cols);
+  const w = NODE_W * scale;
+  const h = NODE_H * scale;
   return {
     cols,
     rows,
-    width: Math.max(MIN_CLUSTER_W, cols * NODE_W + (cols - 1) * GAP_X + PAD * 2),
-    height: HEADER_H + rows * NODE_H + (rows - 1) * GAP_Y + PAD,
+    width: Math.max(MIN_CLUSTER_W, cols * w + (cols - 1) * GAP_X + PAD * 2),
+    height: HEADER_H + rows * h + (rows - 1) * GAP_Y + PAD,
   };
 }
 
@@ -78,19 +80,22 @@ function clusterGrid(count: number) {
  * top-left, where you look first. That placement is the entire argument for
  * this screen existing.
  */
-export function computeLayout(trades: Trade[]): BoardLayout {
+export function computeLayout(trades: Trade[], scale = 1): BoardLayout {
   const groups: Group<Reason>[] = byReason(trades).sort((a, b) => a.stats.totalR - b.stats.totalR);
 
   const clusters: PositionedCluster[] = [];
   const nodes: PositionedTrade[] = [];
   const reasonEdges: Array<[string, string]> = [];
 
+  const nodeW = NODE_W * scale;
+  const nodeH = NODE_H * scale;
+
   let cursorX = 0;
   let cursorY = 0;
   let rowHeight = 0;
 
   for (const group of groups) {
-    const grid = clusterGrid(group.trades.length);
+    const grid = clusterGrid(group.trades.length, scale);
 
     // Wrap to the next row when this cluster would overflow the board width.
     if (cursorX > 0 && cursorX + grid.width > BOARD_W) {
@@ -99,18 +104,9 @@ export function computeLayout(trades: Trade[]): BoardLayout {
       rowHeight = 0;
     }
 
-    clusters.push({
-      reason: group.key,
-      stats: group.stats,
-      x: cursorX,
-      y: cursorY,
-      width: grid.width,
-      height: grid.height,
-      trades: group.trades,
-    });
-
     // Newest first, so the most recent trade sits top-left inside its cluster.
     const ordered = [...group.trades].sort((a, b) => b.date.localeCompare(a.date));
+    const placed: PositionedTrade[] = [];
 
     ordered.forEach((trade, i) => {
       const col = i % grid.cols;
@@ -119,16 +115,37 @@ export function computeLayout(trades: Trade[]): BoardLayout {
       const jitterX = (seeded(trade.id, 1) - 0.5) * 26;
       const jitterY = (seeded(trade.id, 2) - 0.5) * 22;
 
-      nodes.push({
+      placed.push({
         trade,
         reason: group.key,
-        // A manual drag wins over the computed position.
-        x: trade.position_x ?? cursorX + PAD + col * (NODE_W + GAP_X) + jitterX,
-        y: trade.position_y ?? cursorY + HEADER_H + row * (NODE_H + GAP_Y) + jitterY,
+        // A stored position always wins: once a trade has been drawn it keeps
+        // its spot, so adding a later trade never rearranges the board.
+        x: trade.position_x ?? cursorX + PAD + col * (nodeW + GAP_X) + jitterX,
+        y: trade.position_y ?? cursorY + HEADER_H + row * (nodeH + GAP_Y) + jitterY,
       });
 
       if (i > 0) reasonEdges.push([ordered[i - 1].id, trade.id]);
     });
+
+    nodes.push(...placed);
+
+    /*
+      The region is drawn around where the nodes actually ended up, not around
+      where the grid would have put them. Once positions are pinned — or a card
+      is dragged — a region derived from the grid no longer contains its own
+      trades, which looked like a rendering fault.
+    */
+    const minX = Math.min(...placed.map((n) => n.x));
+    const minY = Math.min(...placed.map((n) => n.y));
+    const maxX = Math.max(...placed.map((n) => n.x + nodeW));
+    const maxY = Math.max(...placed.map((n) => n.y + nodeH));
+
+    const x = minX - PAD;
+    const y = minY - HEADER_H;
+    const width = Math.max(MIN_CLUSTER_W, maxX - minX + PAD * 2);
+    const height = maxY - minY + HEADER_H + PAD;
+
+    clusters.push({ reason: group.key, stats: group.stats, x, y, width, height, trades: group.trades });
 
     cursorX += grid.width + CLUSTER_GAP;
     rowHeight = Math.max(rowHeight, grid.height);

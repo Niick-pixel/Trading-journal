@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { press, spring } from '@/lib/motion';
+import { Wordmark } from './Wordmark';
 
 const TABS = [
   { href: '/', label: 'Whiteboard' },
@@ -42,6 +43,8 @@ export function TitleBar() {
         paddingRight: isWindows ? 148 : 16,
       }}
     >
+      <Wordmark />
+
       {/* Centred on the window, not on the space left over — so the tabs stay
           put regardless of what sits either side of them. */}
       <nav className="pointer-events-none absolute inset-x-0 flex justify-center">

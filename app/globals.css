@@ -121,6 +121,10 @@
   --cluster-glow: 0.28;
   /* Behind a letterboxed chart. Charts are usually dark, but a black slab
      reads as a bug on a light panel. */
+  /* The title-bar mark. Ink stays mint in both themes; the tile behind it
+     flips so the mark sits on its own ground rather than on the page. */
+  --mark-ground: #0d0d12;
+  --mark-ink: #5eead4;
   --letterbox: rgba(0, 0, 0, 0.06);
   --scrollbar: rgba(0, 0, 0, 0.22);
   --scrollbar-hover: rgba(0, 0, 0, 0.34);
@@ -158,6 +162,8 @@
   --cluster-tint-edge: 0.03;
   --cluster-stroke: 0.30;
   --cluster-glow: 0.35;
+  --mark-ground: #0d0d12;
+  --mark-ink: #5eead4;
   --letterbox: rgba(0, 0, 0, 0.35);
   --scrollbar: rgba(255, 255, 255, 0.16);
   --scrollbar-hover: rgba(255, 255, 255, 0.26);
@@ -165,6 +171,33 @@
 
 html, body {
   height: 100%;
+}
+
+/*
+  UI scale.
+
+  Every size in this app is authored in px for precision, which means a
+  font-size multiplier on the root does nothing — an explicit `text-[13px]`
+  beats it. `zoom` scales the rendered result instead, so the whole interface
+  grows together and nothing has to be re-authored in relative units.
+*/
+:root {
+  --text-scale: 1;
+}
+body {
+  zoom: var(--text-scale);
+}
+
+/*
+  Reduced motion. The design leans hard on springs, so this is a real setting
+  rather than a nicety.
+*/
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 body {

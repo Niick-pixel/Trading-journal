@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, spring, springSnappy, stagger } from '@/lib/motion';
 
@@ -29,13 +30,51 @@ export function Select<T extends string>({
   const [active, setActive] = useState(0);
   const [hovered, setHovered] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const listId = useId();
+
+  // The menu is rendered in a portal at fixed coordinates rather than inside
+  // the field. In the document flow it displaced everything below it whenever
+  // it opened, and inside a scrolling panel it was liable to be clipped.
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; flip: boolean } | null>(null);
+
+  const measure = useCallback(() => {
+    const trigger = rootRef.current;
+    if (!trigger) return;
+    const box = trigger.getBoundingClientRect();
+    const menuHeight = Math.min(288, options.length * 38 + 12);
+    // Open upward when there isn't room below, so a field near the bottom of
+    // the window doesn't push its own menu off-screen.
+    const flip = box.bottom + menuHeight + 12 > window.innerHeight && box.top > menuHeight + 12;
+    setRect({
+      left: box.left,
+      top: flip ? box.top - menuHeight - 8 : box.bottom + 8,
+      width: box.width,
+      flip,
+    });
+  }, [options.length]);
+
+  useLayoutEffect(() => { if (open) measure(); }, [open, measure]);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => measure();
+    window.addEventListener('resize', update);
+    // Capture phase catches scrolling in any ancestor, not just the window.
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, measure]);
 
   // Click-away and Escape both close.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // The menu lives in a portal, so it is not a DOM descendant of the field.
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
@@ -97,51 +136,63 @@ export function Select<T extends string>({
         </motion.svg>
       </motion.button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.ul
-            id={listId}
-            role="listbox"
-            initial={{ opacity: 0, scale: 0.94, y: -6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -4 }}
-            transition={spring}
-            style={{ transformOrigin: 'top center', boxShadow: 'var(--shadow-panel)' }}
-            className="glass absolute z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-[18px] p-1.5"
-          >
-            {options.map((option, i) => {
-              const optionAccent = accentFor?.(option) ?? accent;
-              const selected = option === value;
-              return (
-                <motion.li
-                  key={option}
-                  role="option"
-                  aria-selected={selected}
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={stagger(i)}
-                  onPointerEnter={() => setActive(i)}
-                  onClick={() => commit(option)}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-[11px] px-3 py-2 text-[13px]"
-                  style={{
-                    background: i === active ? `rgb(${optionAccent} / 0.16)` : 'transparent',
-                    color: selected ? `rgb(${optionAccent})` : 'var(--text)',
-                  }}
-                >
-                  <span
-                    className="size-1.5 shrink-0 rounded-full"
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {open && rect && (
+            <motion.ul
+              ref={menuRef}
+              id={listId}
+              role="listbox"
+              initial={{ opacity: 0, scale: 0.94, y: rect.flip ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: rect.flip ? 4 : -4 }}
+              transition={spring}
+              style={{
+                position: 'fixed',
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                transformOrigin: rect.flip ? 'bottom center' : 'top center',
+                boxShadow: 'var(--shadow-panel)',
+                background: 'color-mix(in srgb, var(--bg-raised) 92%, transparent)',
+              }}
+              className="glass z-[100] max-h-72 overflow-y-auto rounded-[18px] p-1.5"
+            >
+              {options.map((option, i) => {
+                const optionAccent = accentFor?.(option) ?? accent;
+                const selected = option === value;
+                return (
+                  <motion.li
+                    key={option}
+                    role="option"
+                    aria-selected={selected}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={stagger(i)}
+                    onPointerEnter={() => setActive(i)}
+                    onClick={() => commit(option)}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-[11px] px-3 py-2 text-[13px]"
                     style={{
-                      background: selected ? `rgb(${optionAccent})` : 'transparent',
-                      boxShadow: selected ? `0 0 8px rgb(${optionAccent} / 0.8)` : undefined,
+                      background: i === active ? `rgb(${optionAccent} / 0.16)` : 'transparent',
+                      color: selected ? `rgb(${optionAccent})` : 'var(--text)',
                     }}
-                  />
-                  <span className="truncate">{option}</span>
-                </motion.li>
-              );
-            })}
-          </motion.ul>
-        )}
-      </AnimatePresence>
+                  >
+                    <span
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{
+                        background: selected ? `rgb(${optionAccent})` : 'transparent',
+                        boxShadow: selected ? `0 0 8px rgb(${optionAccent} / 0.8)` : undefined,
+                      }}
+                    />
+                    <span className="truncate">{option}</span>
+                  </motion.li>
+                );
+              })}
+            </motion.ul>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

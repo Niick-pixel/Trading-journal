@@ -106,6 +106,27 @@ export function setPosition(id: string, x: number | null, y: number | null): voi
   getDb().prepare('UPDATE trades SET position_x = @x, position_y = @y WHERE id = @id').run({ id, x, y });
 }
 
+/**
+ * Writes positions for several trades at once.
+ *
+ * Used to pin trades the moment they first appear on the board. Without it a
+ * trade only gets coordinates when it is dragged, so every reload re-derived
+ * the layout and the whole board shuffled whenever a new trade was added.
+ */
+export function setPositions(entries: Array<{ id: string; x: number; y: number }>): void {
+  if (entries.length === 0) return;
+  const db = getDb();
+  const stmt = db.prepare('UPDATE trades SET position_x = @x, position_y = @y WHERE id = @id');
+  db.exec('BEGIN');
+  try {
+    for (const e of entries) stmt.run({ id: e.id, x: e.x, y: e.y });
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 export function clearAllPositions(): void {
   getDb().exec('UPDATE trades SET position_x = NULL, position_y = NULL');
 }

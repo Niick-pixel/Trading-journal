@@ -106,6 +106,48 @@ export function RateBars({ rows }: { rows: BarRow[] }) {
   );
 }
 
+/** A single headline number. The row of these is the first thing you read. */
+export function Stat({
+  label, value, sub, tone,
+}: { label: string; value: string; sub?: string; tone?: 'win' | 'loss' | null }) {
+  const color = tone === 'win' ? 'rgb(var(--outcome-win))'
+    : tone === 'loss' ? 'rgb(var(--outcome-loss))'
+    : 'var(--text)';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring}
+      className="glass rounded-[18px] px-4 py-3.5"
+    >
+      <div className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+        {label}
+      </div>
+      <div className="mt-1.5 tabular-nums text-[19px] font-semibold leading-none" style={{ color }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="mt-1.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>{sub}</div>
+      )}
+    </motion.div>
+  );
+}
+
+/** A plain label/value line, for the denser breakdown panels. */
+export function Line({
+  label, value, tone,
+}: { label: string; value: string; tone?: 'win' | 'loss' | null }) {
+  const color = tone === 'win' ? 'rgb(var(--outcome-win))'
+    : tone === 'loss' ? 'rgb(var(--outcome-loss))'
+    : 'var(--text)';
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-1.5">
+      <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>{label}</span>
+      <span className="tabular-nums text-[12px] font-semibold" style={{ color }}>{value}</span>
+    </div>
+  );
+}
+
 export function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <motion.section

@@ -15,7 +15,10 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
-    setTheme((document.documentElement.dataset.theme as Theme) ?? 'light');
+    const current = (document.documentElement.dataset.theme as Theme) ?? 'light';
+    setTheme(current);
+    // The window-button strip is painted by the shell, not by CSS.
+    window.signature?.setTitleBarTheme(current);
   }, []);
 
   const flip = () => {
@@ -23,6 +26,7 @@ export function ThemeToggle() {
     setTheme(next);
     if (next === 'dark') document.documentElement.dataset.theme = 'dark';
     else delete document.documentElement.dataset.theme;
+    window.signature?.setTitleBarTheme(next);
     try {
       localStorage.setItem(THEME_KEY, next);
     } catch {

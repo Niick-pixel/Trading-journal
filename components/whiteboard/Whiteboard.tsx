@@ -11,6 +11,9 @@ import { computeLayout, reasonAccent, NODE_H, NODE_W } from '@/lib/layout';
 import { spring, springBouncy } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { usePreferences } from '@/components/shell/PreferencesProvider';
+import { DENSITY_SCALE } from '@/lib/preferences';
+import { BoardControls } from './BoardControls';
 import { ClusterNode } from './ClusterNode';
 import { DetailPanel } from './DetailPanel';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
@@ -18,7 +21,7 @@ import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
 const nodeTypes = { trade: TradeNode, cluster: ClusterNode };
 
-function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
+function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[]; readOnly?: boolean }) {
   const [trades, setTrades] = useState(initial);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -28,10 +31,13 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
     if (res.ok) setTrades(await res.json());
   }, []);
 
-  const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
-  const layout = useMemo(() => computeLayout(visible), [visible]);
+  const { prefs } = usePreferences();
+  const scale = DENSITY_SCALE[prefs.boardDensity];
 
-  const onOpen = useCallback((id: string) => setOpenId(id), []);
+  const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
+  const layout = useMemo(() => computeLayout(visible, scale), [visible, scale]);
+
+  const onOpen = useCallback((id: string) => { if (!readOnly) setOpenId(id); }, [readOnly]);
 
   const nodes = useMemo<Node[]>(() => {
     const clusterNodes: Node[] = layout.clusters.map((cluster, index) => ({
@@ -49,13 +55,15 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
       id: n.trade.id,
       type: 'trade',
       position: { x: n.x, y: n.y },
-      data: { trade: n.trade, selected: openId === n.trade.id, onOpen },
+      data: { trade: n.trade, selected: openId === n.trade.id, onOpen, scale, dimPassed: prefs.dimPassed },
       zIndex: 1,
-      style: { width: NODE_W, height: NODE_H },
+      // Only the grab handle moves a node. See TradeNode for why.
+      dragHandle: '.signature-drag-handle',
+      style: { width: NODE_W * scale, height: NODE_H * scale },
     }));
 
     return [...clusterNodes, ...tradeNodes];
-  }, [layout, openId, onOpen]);
+  }, [layout, openId, onOpen, scale, prefs.dimPassed]);
 
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
@@ -63,8 +71,15 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
       const accent = reason ? reasonAccent(reason) : '140 140 150';
       return {
         id: `r-${a}-${b}`,
-        source: a, target: b, type: 'default', animated: true,
-        style: { stroke: `rgb(${accent} / 0.42)`, strokeWidth: 1 },
+        source: a, target: b, type: 'default', animated: false,
+        // Dotted, in the cluster's own hue: these say "same reason", which is a
+        // quieter statement than the repeating-leak edges below.
+        style: {
+          stroke: `rgb(${accent} / 0.55)`,
+          strokeWidth: 1.2,
+          strokeDasharray: '1 5',
+          strokeLinecap: 'round',
+        },
         zIndex: 0,
       };
     });
@@ -72,17 +87,22 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
     // The repeating leak: same target type, both lost. Deliberately loud.
     const leaks: Edge[] = layout.leakEdges.map(([a, b]) => ({
       id: `leak-${a}-${b}`,
-      source: a, target: b, type: 'default', animated: false,
+      source: a, target: b, type: 'default', animated: true,
+      // Heavier, dashed and moving — a repeating leak should be the loudest
+      // line on the board.
       style: {
-        stroke: `rgb(${OUTCOME_COLOR.Loss} / 0.55)`,
-        strokeWidth: 1.4,
-        strokeDasharray: '5 5',
+        stroke: `rgb(${OUTCOME_COLOR.Loss} / 0.65)`,
+        strokeWidth: 1.6,
+        strokeDasharray: '6 4',
       },
       zIndex: 2,
     }));
 
-    return [...within, ...leaks];
-  }, [layout]);
+    return [
+      ...(prefs.showReasonEdges ? within : []),
+      ...(prefs.showLeakEdges ? leaks : []),
+    ];
+  }, [layout, prefs.showReasonEdges, prefs.showLeakEdges]);
 
   // Persist a drag so a manual arrangement survives a reload.
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -99,13 +119,43 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
     }
   }, []);
 
+  /**
+   * Pin anything the layout just placed for the first time.
+   *
+   * A trade with no stored coordinates is positioned by the clustering
+   * algorithm, which means its spot depends on every other trade on the board —
+   * so adding one trade quietly rearranged all the others, and closing the app
+   * lost the arrangement entirely. Writing the computed position back the first
+   * time a trade is drawn makes the board stable: from then on it stays where
+   * you last saw it until you re-order deliberately.
+   *
+   * Skipped while a filter is active, because that layout is a subset and
+   * pinning it would bake a filtered arrangement into the whole board.
+   */
+  useEffect(() => {
+    if (readOnly || filtersActive(filters)) return;
+    const unpinned = layout.nodes.filter((n) => n.trade.position_x == null);
+    if (unpinned.length === 0) return;
+
+    const positions = unpinned.map((n) => ({ id: n.trade.id, x: n.x, y: n.y }));
+    void fetch('/api/trades/positions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positions }),
+    }).then(() => {
+      setTrades((prev) => prev.map((t) => {
+        const pin = positions.find((pos) => pos.id === t.id);
+        return pin ? { ...t, position_x: pin.x, position_y: pin.y } : t;
+      }));
+    });
+  }, [layout, filters, readOnly]);
+
   const recluster = useCallback(async () => {
     await fetch('/api/trades/positions', { method: 'DELETE' });
     await refresh();
   }, [refresh]);
 
   const open = openId ? trades.find((t) => t.id === openId) ?? null : null;
-  const moved = trades.some((t) => t.position_x != null);
 
   if (trades.length === 0) {
     return (
@@ -140,7 +190,17 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
   }
 
   return (
-    <div className="relative h-full">
+    <div className="flex h-full flex-col">
+      {/* In the layout, not floating over it. As an overlay this bar covered the
+          top of whichever clusters happened to be nearest the top of the board,
+          including their headers — which are the point of the screen. */}
+      {!readOnly && (
+        <div className="shrink-0 px-4 pb-2">
+          <Toolbar filters={filters} onChange={setFilters} shown={visible.length} total={trades.length} />
+        </div>
+      )}
+
+      <div className="relative min-h-0 flex-1">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -152,12 +212,19 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
         maxZoom={2.2}
         nodesConnectable={false}
         elementsSelectable={false}
-        panOnScroll
+        nodesDraggable={!readOnly}
+        panOnDrag={!readOnly}
+        zoomOnScroll={!readOnly}
+        zoomOnDoubleClick={!readOnly}
+        panOnScroll={!readOnly}
         selectionOnDrag={false}
         onPaneClick={() => setOpenId(null)}
+        attributionPosition="bottom-center"
         style={{ background: 'transparent' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
+        {prefs.showGrid && (
+          <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
+        )}
       </ReactFlow>
 
       {/* Filtering to nothing used to leave a blank canvas with no explanation. */}
@@ -183,25 +250,25 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
         )}
       </AnimatePresence>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">
-        <div className="pointer-events-auto flex max-w-full items-center gap-3">
-          <Toolbar filters={filters} onChange={setFilters} shown={visible.length} total={trades.length} />
-          {moved && !filtersActive(filters) && (
-            <Button onClick={recluster} className="shrink-0">Re-cluster</Button>
-          )}
+      {/* Zoom and layout, bottom-right — opposite the theme and settings
+          cluster, and out of the way of the board itself. */}
+      {!readOnly && (
+        <div className="pointer-events-none absolute bottom-4 right-4 z-30 flex justify-end">
+          <BoardControls onRecluster={recluster} />
         </div>
-      </div>
+      )}
 
-      <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={refresh} />
+      {!readOnly && <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={refresh} />}
+      </div>
     </div>
   );
 }
 
-export function Whiteboard({ trades }: { trades: Trade[] }) {
+export function Whiteboard({ trades, readOnly }: { trades: Trade[]; readOnly?: boolean }) {
   // ReactFlowProvider has to sit above anything calling its hooks.
   return (
     <ReactFlowProvider>
-      <WhiteboardInner trades={trades} />
+      <WhiteboardInner trades={trades} readOnly={readOnly} />
     </ReactFlowProvider>
   );
 }
