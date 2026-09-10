@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { press, spring } from '@/lib/motion';
+import { ThemeToggle } from './ThemeToggle';
 
 const TABS = [
   { href: '/', label: 'Whiteboard' },
@@ -54,15 +55,18 @@ export function TitleBar() {
         })}
       </nav>
 
-      <motion.div whileTap={press} transition={spring}>
-        <Link
-          href="/new"
-          className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium"
-          style={{ color: 'var(--text)' }}
-        >
-          <span className="text-[13px] leading-none">+</span> New trade
-        </Link>
-      </motion.div>
+      <div className="flex items-center gap-2.5">
+        <ThemeToggle />
+        <motion.div whileTap={press} transition={spring}>
+          <Link
+            href="/new"
+            className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium"
+            style={{ color: 'var(--text)' }}
+          >
+            <span className="text-[13px] leading-none">+</span> New trade
+          </Link>
+        </motion.div>
+      </div>
     </header>
   );
 }

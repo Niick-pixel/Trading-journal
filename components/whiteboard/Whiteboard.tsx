@@ -7,8 +7,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { motion } from 'framer-motion';
-import { REASON_HUE } from '@/lib/domain';
-import { computeLayout, hueToRgb, NODE_H, NODE_W } from '@/lib/layout';
+import { computeLayout, reasonAccent, NODE_H, NODE_W } from '@/lib/layout';
 import { spring } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +38,7 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
       id: `cluster-${cluster.reason}`,
       type: 'cluster',
       position: { x: cluster.x, y: cluster.y },
-      data: { cluster, accent: hueToRgb(REASON_HUE[cluster.reason]) },
+      data: { cluster, accent: reasonAccent(cluster.reason) },
       draggable: false,
       selectable: false,
       zIndex: 0,
@@ -61,10 +60,10 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
       const reason = layout.nodes.find((n) => n.trade.id === a)?.reason;
-      const accent = reason ? hueToRgb(REASON_HUE[reason]) : '140 140 150';
+      const accent = reason ? reasonAccent(reason) : '140 140 150';
       return {
         id: `r-${a}-${b}`,
-        source: a, target: b, type: 'bezier', animated: true,
+        source: a, target: b, type: 'default', animated: true,
         style: { stroke: `rgb(${accent} / 0.42)`, strokeWidth: 1 },
         zIndex: 0,
       };
@@ -73,7 +72,7 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
     // The repeating leak: same target type, both lost. Deliberately loud.
     const leaks: Edge[] = layout.leakEdges.map(([a, b]) => ({
       id: `leak-${a}-${b}`,
-      source: a, target: b, type: 'bezier', animated: false,
+      source: a, target: b, type: 'default', animated: false,
       style: {
         stroke: `rgb(${OUTCOME_COLOR.Loss} / 0.55)`,
         strokeWidth: 1.4,
@@ -147,7 +146,7 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
         onPaneClick={() => setOpenId(null)}
         style={{ background: 'transparent' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="rgba(255,255,255,0.055)" />
+        <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
       </ReactFlow>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center p-4">

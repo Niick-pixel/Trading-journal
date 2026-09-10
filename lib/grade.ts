@@ -25,14 +25,17 @@ export function isBelowStandard(total: number): boolean {
   return total <= BELOW_STANDARD_AT;
 }
 
-/** A+ mint, A green, B amber, C orange, F red. Used for text, border and glow. */
+/**
+ * A+ mint, A green, B amber, C orange, F red — as CSS variables, because the
+ * pastel that reads on near-black is invisible on white. See app/globals.css.
+ */
 export const GRADE_COLOR: Record<GradeLetter, string> = {
-  'A+': '167 243 208', // mint
-  A: '134 239 172', // green
-  'B+': '253 224 71', // amber-yellow
-  B: '252 211 77', // amber
-  C: '251 146 60', // orange
-  F: '248 113 113', // red
+  'A+': 'var(--grade-aplus)',
+  A: 'var(--grade-a)',
+  'B+': 'var(--grade-bplus)',
+  B: 'var(--grade-b)',
+  C: 'var(--grade-c)',
+  F: 'var(--grade-f)',
 };
 
 /** Buckets for "does my grading actually predict outcomes?" on the stats page. */

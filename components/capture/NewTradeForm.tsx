@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REASON_HUE,
+  DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
   RUBRIC, SESSIONS, SETUP_TYPES, TARGET_TYPES,
   type Direction, type HtfBias, type Instrument, type Outcome, type PremiumDiscount,
   type Reason, type Session, type SetupType, type TargetType,
@@ -11,8 +11,8 @@ import {
 import { GRADE_MAX } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
 import { spring, riseIn } from '@/lib/motion';
-import { hueToRgb } from '@/lib/layout';
-import { MIN_EXPLANATION } from '@/lib/types';
+import { reasonAccent } from '@/lib/layout';
+import { MIN_EXPLANATION, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { Field, Input } from '@/components/ui/Field';
@@ -29,58 +29,62 @@ function toLocalInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function NewTradeForm() {
+export function NewTradeForm({ trade }: { trade?: Trade }) {
+  const editing = Boolean(trade);
   const [file, setFile] = useState<File | null>(null);
-  const [reason, setReason] = useState<Reason | null>(null);
-  const [explanation, setExplanation] = useState('');
+  const [reason, setReason] = useState<Reason | null>(trade?.reason ?? null);
+  const [explanation, setExplanation] = useState(trade?.explanation ?? '');
 
-  const [sweep, setSweep] = useState(false);
-  const [singularGap, setSingularGap] = useState(false);
-  const [targetUnswept, setTargetUnswept] = useState(false);
-  const [smt, setSmt] = useState(false);
+  const [sweep, setSweep] = useState(trade?.sweep_before_entry ?? false);
+  const [singularGap, setSingularGap] = useState(trade?.singular_gap ?? false);
+  const [targetUnswept, setTargetUnswept] = useState(trade?.target_unswept ?? false);
+  const [smt, setSmt] = useState(trade?.smt ?? false);
 
-  const [candleStrength, setCandleStrength] = useState(0);
-  const [inversionSpeed, setInversionSpeed] = useState(0);
-  const [riskReward, setRiskReward] = useState(0);
+  const [candleStrength, setCandleStrength] = useState(trade?.candle_strength ?? 0);
+  const [inversionSpeed, setInversionSpeed] = useState(trade?.inversion_speed ?? 0);
+  const [riskReward, setRiskReward] = useState(trade?.risk_reward ?? 0);
 
-  const [date, setDate] = useState(() => toLocalInput(new Date()));
-  const [instrument, setInstrument] = useState<Instrument>('NQ');
-  const [direction, setDirection] = useState<Direction>('Long');
-  const [session, setSession] = useState<Session>('NY AM');
-  const [setupType, setSetupType] = useState<SetupType>('iFVG');
-  const [htfBias, setHtfBias] = useState<HtfBias>('With bias');
-  const [premiumDiscount, setPremiumDiscount] = useState<PremiumDiscount>('Discount');
-  const [targetType, setTargetType] = useState<TargetType>('Horizontal liquidity pool');
-  const [outcome, setOutcome] = useState<Outcome>('Win');
-  const [contracts, setContracts] = useState('');
-  const [riskDollars, setRiskDollars] = useState('');
-  const [stopPoints, setStopPoints] = useState('');
-  const [rMultiple, setRMultiple] = useState('');
-  const [lesson, setLesson] = useState('');
+  const [date, setDate] = useState(() => (trade ? toLocalInput(new Date(trade.date)) : toLocalInput(new Date())));
+  const [instrument, setInstrument] = useState<Instrument>(trade?.instrument ?? 'NQ');
+  const [direction, setDirection] = useState<Direction>(trade?.direction ?? 'Long');
+  const [session, setSession] = useState<Session>(trade?.session ?? 'NY AM');
+  const [setupType, setSetupType] = useState<SetupType>(trade?.setup_type ?? 'iFVG');
+  const [htfBias, setHtfBias] = useState<HtfBias>(trade?.htf_bias ?? 'With bias');
+  const [premiumDiscount, setPremiumDiscount] = useState<PremiumDiscount>(trade?.premium_discount ?? 'Discount');
+  const [targetType, setTargetType] = useState<TargetType>(trade?.target_type ?? 'Horizontal liquidity pool');
+  const [outcome, setOutcome] = useState<Outcome>(trade?.outcome ?? 'Win');
+  const [contracts, setContracts] = useState(trade?.contracts?.toString() ?? '');
+  const [riskDollars, setRiskDollars] = useState(trade?.risk_dollars?.toString() ?? '');
+  const [stopPoints, setStopPoints] = useState(trade?.stop_points?.toString() ?? '');
+  const [rMultiple, setRMultiple] = useState(trade?.r_multiple?.toString() ?? '');
+  const [lesson, setLesson] = useState(trade?.lesson ?? '');
 
   // Macro time derives from the timestamp; an explicit toggle wins and is
   // remembered as an override so a later date edit doesn't silently undo it.
   const derivedWindow = useMemo(() => macroWindowFor(date), [date]);
-  const [macroOverride, setMacroOverride] = useState<boolean | null>(null);
+  const [macroOverride, setMacroOverride] = useState<boolean | null>(
+    trade && !trade.macro_time_auto ? trade.macro_time : null,
+  );
   const macroTime = macroOverride ?? derivedWindow !== null;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const total = candleStrength + inversionSpeed + riskReward;
-  const accent = reason ? hueToRgb(REASON_HUE[reason]) : 'var(--accent)';
+  const accent = reason ? reasonAccent(reason) : 'var(--accent)';
   const explanationOk = explanation.trim().length >= MIN_EXPLANATION;
-  const canSubmit = Boolean(file) && Boolean(reason) && explanationOk && !submitting;
+  const canSubmit = (Boolean(file) || editing) && Boolean(reason) && explanationOk && !submitting;
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
 
   async function submit() {
-    if (!canSubmit || !file || !reason) return;
+    if (!canSubmit || !reason) return;
     setSubmitting(true);
     setError(null);
 
     const body = new FormData();
-    body.append('screenshot', file);
+    // On an edit, sending no file means "keep the screenshot you already have".
+    if (file) body.append('screenshot', file);
     body.append('trade', JSON.stringify({
       date, instrument, direction, session,
       macro_time: macroTime, macro_time_auto: macroOverride === null,
@@ -94,7 +98,10 @@ export function NewTradeForm() {
     }));
 
     try {
-      const res = await fetch('/api/trades', { method: 'POST', body });
+      const res = await fetch(editing ? `/api/trades/${trade!.id}` : '/api/trades', {
+        method: editing ? 'PUT' : 'POST',
+        body,
+      });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Could not save the trade.');
       window.location.href = '/';
     } catch (err) {
@@ -106,15 +113,21 @@ export function NewTradeForm() {
   return (
     <motion.div {...riseIn} transition={spring} className="glass rounded-[28px] p-7 sm:p-9">
       <div className="mb-7">
-        <h1 className="text-[22px] font-semibold">New trade</h1>
+        <h1 className="text-[22px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
         <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
-          Name the motive before the data. That is the whole point.
+          {editing
+            ? 'Paste a new chart to replace the screenshot, or leave it as it is.'
+            : 'Name the motive before the data. That is the whole point.'}
         </p>
       </div>
 
       <div className="space-y-8">
         {/* 1 — the chart, first. */}
-        <ScreenshotDropzone file={file} onFile={setFile} />
+        <ScreenshotDropzone
+          file={file}
+          onFile={setFile}
+          existingUrl={trade ? `/api/screenshots/${trade.screenshot_path}` : null}
+        />
 
         {/* 2 — reason, before anything else. */}
         <Field label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
@@ -123,7 +136,7 @@ export function NewTradeForm() {
             onChange={setReason}
             options={REASONS}
             placeholder="Name your motive…"
-            accentFor={(r) => hueToRgb(REASON_HUE[r as Reason])}
+            accentFor={(r) => reasonAccent(r as Reason)}
           />
         </Field>
 
@@ -145,7 +158,7 @@ export function NewTradeForm() {
               hint="Rule 1 — one clean obvious gap, not stacked." />
             <TogglePill checked={targetUnswept} onChange={setTargetUnswept} label="Target unswept"
               hint="Rule 4 — the next high/low was still unswept." />
-            <TogglePill checked={smt} onChange={setSmt} label="SMT divergence" accent="122 162 255" />
+            <TogglePill checked={smt} onChange={setSmt} label="SMT divergence" accent="var(--accent)" />
           </div>
         </Field>
 
@@ -187,7 +200,7 @@ export function NewTradeForm() {
                 checked={macroTime}
                 onChange={(next) => setMacroOverride(next === (derivedWindow !== null) ? null : next)}
                 label={derivedWindow ? `Macro time (${derivedWindow})` : 'Macro time'}
-                accent="122 162 255"
+                accent="var(--accent)"
               />
               <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
                 {macroOverride !== null
@@ -236,11 +249,11 @@ export function NewTradeForm() {
         <div className="min-w-0 text-[12px]" style={{ color: 'var(--text-faint)' }}>
           <AnimatePresence mode="wait">
             <motion.span
-              key={!file ? 'file' : !reason ? 'reason' : !explanationOk ? 'expl' : 'ready'}
+              key={!file && !editing ? 'file' : !reason ? 'reason' : !explanationOk ? 'expl' : 'ready'}
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
               transition={spring} className="block truncate"
             >
-              {!file ? 'A screenshot is required.'
+              {!file && !editing ? 'A screenshot is required.'
                 : !reason ? 'Name your motive to continue.'
                 : !explanationOk ? `${MIN_EXPLANATION - explanation.trim().length} more characters of explanation.`
                 : 'Ready.'}
@@ -249,14 +262,14 @@ export function NewTradeForm() {
         </div>
 
         <Button variant="primary" accent={accent} disabled={!canSubmit} onClick={submit} className="shrink-0">
-          {submitting ? 'Saving…' : 'Save trade'}
+          {submitting ? 'Saving…' : editing ? 'Save changes' : 'Save trade'}
         </Button>
       </div>
 
       <AnimatePresence>
         {error && (
           <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            transition={spring} className="mt-4 text-[12px]" style={{ color: 'rgb(248 113 113)' }}>
+            transition={spring} className="mt-4 text-[12px]" style={{ color: 'rgb(var(--outcome-loss))' }}>
             {error}
           </motion.p>
         )}

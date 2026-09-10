@@ -33,7 +33,7 @@ function ClusterNodeInner({ data }: NodeProps) {
   const { cluster, accent } = data as unknown as ClusterNodeData;
   const { stats } = cluster;
 
-  const rTone = stats.totalR > 0 ? '134 239 172' : stats.totalR < 0 ? '248 113 113' : null;
+  const rTone = stats.totalR > 0 ? 'var(--outcome-win)' : stats.totalR < 0 ? 'var(--outcome-loss)' : null;
 
   return (
     <motion.div
@@ -42,9 +42,9 @@ function ClusterNodeInner({ data }: NodeProps) {
       style={{
         width: cluster.width,
         height: cluster.height,
-        borderColor: `rgb(${accent} / 0.30)`,
-        background: `radial-gradient(120% 90% at 50% 0%, rgb(${accent} / 0.10), rgb(${accent} / 0.03) 60%, transparent)`,
-        boxShadow: `0 0 70px -12px rgb(${accent} / 0.35), inset 0 1px 0 rgb(${accent} / 0.22)`,
+        borderColor: `rgb(${accent} / var(--cluster-stroke))`,
+        background: `radial-gradient(120% 90% at 50% 0%, rgb(${accent} / var(--cluster-tint)), rgb(${accent} / var(--cluster-tint-edge)) 60%, transparent)`,
+        boxShadow: `0 0 70px -12px rgb(${accent} / var(--cluster-glow)), inset 0 1px 0 rgb(${accent} / 0.22)`,
       }}
       className="pointer-events-none rounded-[30px] border backdrop-blur-[2px]"
     >

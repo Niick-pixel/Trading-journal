@@ -3,7 +3,7 @@
 /*
   Signature's design tokens.
 
-  Dark is primary; light is supported through prefers-color-scheme. Colour is
+  Light is primary; dark is opt-in via the toggle. Colour is
   rationed — surfaces stay near-monochrome and hue is reserved for three things
   only: grade, outcome, and reason-cluster identity.
 */
@@ -17,7 +17,42 @@
   --radius-panel: 28px;
 }
 
+/*
+  Light is the default. Dark is opt-in via data-theme="dark" on <html>.
+
+  System preference is deliberately NOT consulted: the app should open light on
+  a machine set to dark, and only go dark if you ask it to.
+*/
 :root {
+  color-scheme: light;
+
+  --bg: #ececed;
+  --bg-raised: #f7f7f8;
+  --text: #16161a;
+  --text-dim: #5c5c66;
+  --text-faint: #8a8a94;
+
+  /* Liquid glass */
+  --glass-fill: rgba(255, 255, 255, 0.55);
+  --glass-fill-strong: rgba(255, 255, 255, 0.78);
+  --glass-stroke: rgba(0, 0, 0, 0.09);
+  /* The specular top edge — on light surfaces it is pure white, and it is
+     still the line that sells the glass. */
+  --glass-specular: rgba(255, 255, 255, 0.95);
+  --glass-blur: blur(24px) saturate(180%);
+
+  /* Layered shadows: one tight, one wide and soft. Never a single flat one. */
+  --shadow-card:
+    0 1px 2px rgba(16, 16, 24, 0.10),
+    0 16px 40px -12px rgba(16, 16, 24, 0.16);
+  --shadow-panel:
+    0 2px 6px rgba(16, 16, 24, 0.12),
+    0 40px 88px -24px rgba(16, 16, 24, 0.22);
+
+  --accent: 52 104 232;
+}
+
+:root[data-theme='dark'] {
   color-scheme: dark;
 
   --bg: #08080b;
@@ -26,16 +61,11 @@
   --text-dim: #8b8b93;
   --text-faint: #5a5a63;
 
-  /* Liquid glass */
   --glass-fill: rgba(255, 255, 255, 0.06);
   --glass-fill-strong: rgba(255, 255, 255, 0.09);
   --glass-stroke: rgba(255, 255, 255, 0.12);
-  /* The specular top edge — brighter than the rest of the stroke.
-     This single line is what sells the glass. */
   --glass-specular: rgba(255, 255, 255, 0.42);
-  --glass-blur: blur(24px) saturate(180%);
 
-  /* Layered shadows: one tight and dark, one wide and soft. Never one flat. */
   --shadow-card:
     0 1px 2px rgba(0, 0, 0, 0.55),
     0 16px 48px -12px rgba(0, 0, 0, 0.65);
@@ -46,30 +76,83 @@
   --accent: 122 162 255;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
 
-    --bg: #ececed;
-    --bg-raised: #f6f6f7;
-    --text: #16161a;
-    --text-dim: #6a6a73;
-    --text-faint: #9a9aa3;
+/*
+  Palettes.
 
-    --glass-fill: rgba(255, 255, 255, 0.55);
-    --glass-fill-strong: rgba(255, 255, 255, 0.72);
-    --glass-stroke: rgba(0, 0, 0, 0.08);
-    --glass-specular: rgba(255, 255, 255, 0.95);
+  These are CSS variables rather than constants in TypeScript because the same
+  colour cannot serve both themes: the mint that reads beautifully on near-black
+  is invisible on white. Components reference them as `rgb(var(--grade-a) / 0.4)`,
+  so alpha still composes and the theme swap costs nothing at runtime.
+*/
+:root {
+  --reason-0: 28 156 96;
+  --reason-1: 28 156 130;
+  --reason-2: 156 36 28;
+  --reason-3: 156 28 53;
+  --reason-4: 156 88 28;
+  --reason-5: 88 28 156;
+  --reason-6: 28 92 156;
+  --reason-7: 28 126 156;
+  --reason-8: 156 122 28;
+  --reason-9: 152 156 28;
+  --reason-10: 156 28 113;
+  --reason-11: 28 28 156;
 
-    --shadow-card:
-      0 1px 2px rgba(0, 0, 0, 0.10),
-      0 16px 40px -12px rgba(0, 0, 0, 0.18);
-    --shadow-panel:
-      0 2px 6px rgba(0, 0, 0, 0.12),
-      0 40px 88px -24px rgba(0, 0, 0, 0.24);
+  --grade-aplus: 4 140 98;
+  --grade-a: 21 128 61;
+  --grade-bplus: 161 118 8;
+  --grade-b: 176 122 10;
+  --grade-c: 194 89 20;
+  --grade-f: 190 42 42;
 
-    --accent: 60 110 235;
-  }
+  --outcome-win: 21 128 61;
+  --outcome-loss: 190 42 42;
+  --outcome-neutral: 100 116 139;
+  --outcome-passed: 140 140 152;
+
+  --amber: 180 105 10;
+  --board-dots: rgba(0, 0, 0, 0.09);
+  /* Cluster regions need more tint on white than they do on black to read as
+     regions at all. */
+  --cluster-tint: 0.16;
+  --cluster-tint-edge: 0.06;
+  --cluster-stroke: 0.45;
+  --cluster-glow: 0.28;
+}
+
+:root[data-theme='dark'] {
+  --reason-0: 98 218 162;
+  --reason-1: 98 218 194;
+  --reason-2: 218 106 98;
+  --reason-3: 218 98 122;
+  --reason-4: 218 154 98;
+  --reason-5: 154 98 218;
+  --reason-6: 98 158 218;
+  --reason-7: 98 190 218;
+  --reason-8: 218 186 98;
+  --reason-9: 214 218 98;
+  --reason-10: 218 98 178;
+  --reason-11: 98 98 218;
+
+  --grade-aplus: 167 243 208;
+  --grade-a: 134 239 172;
+  --grade-bplus: 253 224 71;
+  --grade-b: 252 211 77;
+  --grade-c: 251 146 60;
+  --grade-f: 248 113 113;
+
+  --outcome-win: 134 239 172;
+  --outcome-loss: 248 113 113;
+  --outcome-neutral: 148 163 184;
+  --outcome-passed: 100 100 112;
+
+  --amber: 251 191 36;
+  --board-dots: rgba(255, 255, 255, 0.06);
+  --cluster-tint: 0.10;
+  --cluster-tint-edge: 0.03;
+  --cluster-stroke: 0.30;
+  --cluster-glow: 0.35;
 }
 
 html, body {
@@ -101,19 +184,17 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.16), transparent 62%),
-    radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.13), transparent 62%),
-    radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.11), transparent 62%);
+    radial-gradient(42rem 34rem at 18% 8%,  rgba(84, 124, 255, 0.20), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(150, 96, 230, 0.16), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(48, 176, 166, 0.15), transparent 62%);
   filter: blur(28px);
 }
 
-@media (prefers-color-scheme: light) {
-  body::before {
-    background:
-      radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.22), transparent 62%),
-      radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.18), transparent 62%),
-      radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.16), transparent 62%);
-  }
+:root[data-theme='dark'] body::before {
+  background:
+    radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.16), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.13), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.11), transparent 62%);
 }
 
 /* Headings run tight; body runs generous. */

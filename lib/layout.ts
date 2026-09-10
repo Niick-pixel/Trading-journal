@@ -1,5 +1,5 @@
 import { byReason, leakPairs, type Group } from './stats';
-import type { Reason } from './domain';
+import { REASONS, type Reason } from './domain';
 import type { Trade } from './types';
 import type { Aggregate } from './stats';
 
@@ -163,11 +163,14 @@ function leakChains(trades: Trade[]): Array<[string, string]> {
   return chains;
 }
 
-/** REASON_HUE stores a hue angle; the UI needs an 'r g b' triple. */
-export function hueToRgb(h: number, s = 0.62, l = 0.62): string {
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) =>
-    Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
-  return `${f(0)} ${f(8)} ${f(4)}`;
+/**
+ * The colour for a reason cluster, as a CSS variable reference.
+ *
+ * Indexed off REASONS rather than computed from the hue angle, because the same
+ * hue needs a different lightness per theme and a server component has no way to
+ * know which theme is active. app/globals.css defines --reason-0..11 twice.
+ */
+export function reasonAccent(reason: Reason): string {
+  const index = REASONS.indexOf(reason);
+  return `var(--reason-${index < 0 ? 0 : index})`;
 }

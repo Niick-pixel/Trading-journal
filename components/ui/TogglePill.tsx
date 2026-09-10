@@ -13,7 +13,7 @@ interface TogglePillProps {
 }
 
 /** A pill, not a checkbox. Springs and shifts colour when it comes on. */
-export function TogglePill({ checked, onChange, label, hint, accent = '167 243 208' }: TogglePillProps) {
+export function TogglePill({ checked, onChange, label, hint, accent = 'var(--grade-aplus)' }: TogglePillProps) {
   return (
     <motion.button
       type="button"

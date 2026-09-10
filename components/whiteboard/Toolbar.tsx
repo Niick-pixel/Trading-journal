@@ -41,7 +41,7 @@ function Chip({
       onClick={onClick}
       whileTap={press}
       animate={{
-        background: active ? `rgb(${accent} / 0.18)` : 'transparent',
+        background: active ? `rgb(${accent} / 0.18)` : `rgb(${accent} / 0)`,
         borderColor: active ? `rgb(${accent} / 0.55)` : 'var(--glass-stroke)',
         color: active ? `rgb(${accent})` : 'var(--text-dim)',
       }}

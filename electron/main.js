@@ -10,11 +10,15 @@ const net = require('node:net');
 const isDev = !app.isPackaged;
 const ROOT = path.join(__dirname, '..');
 
-/** Chrome's window ground, so the frame never flashes white before React paints. */
-const SHELL_BG = '#0a0a0c';
+/** The window ground. Signature defaults to light, so the frame must too —
+ *  otherwise the shell flashes black before React paints. */
+const SHELL_BG = '#ececed';
 
 let nextServer = null;
 let mainWindow = null;
+/** Last few lines of server output, so a startup failure can explain itself. */
+let serverLog = [];
+let serverExited = null;
 
 /** Ask the OS for a free port so two copies never fight over 3000. */
 function freePort() {
@@ -32,6 +36,14 @@ function waitForServer(port, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const attempt = () => {
+      // If the server has already died there is nothing to wait for. Without
+      // this the app hangs for the full timeout and then reports a timeout,
+      // hiding the real reason (most often: a `npm run dev` server is already
+      // running against this directory, which Next refuses to duplicate).
+      if (serverExited !== null) {
+        reject(new Error(serverLog.join('').trim() || `The local server exited with code ${serverExited}.`));
+        return;
+      }
       const socket = net.connect(port, '127.0.0.1');
       socket.once('connect', () => { socket.destroy(); resolve(); });
       socket.once('error', () => {
@@ -78,10 +90,15 @@ function startNext(port) {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  nextServer.stdout.on('data', (d) => process.stdout.write(`[next] ${d}`));
-  nextServer.stderr.on('data', (d) => process.stderr.write(`[next] ${d}`));
+  const record = (d) => {
+    serverLog.push(String(d));
+    if (serverLog.length > 40) serverLog.shift();
+  };
+  nextServer.stdout.on('data', (d) => { record(d); process.stdout.write(`[next] ${d}`); });
+  nextServer.stderr.on('data', (d) => { record(d); process.stderr.write(`[next] ${d}`); });
   nextServer.on('exit', (code) => {
     nextServer = null;
+    serverExited = code;
     // If the server dies while the window is open, the app is useless — say so.
     if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
       dialog.showErrorBox('Signature stopped', `The local server exited with code ${code}. Restart the app.`);
@@ -100,7 +117,7 @@ function createWindow(port) {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     titleBarOverlay: process.platform === 'darwin'
       ? undefined
-      : { color: SHELL_BG, symbolColor: '#8b8b93', height: 44 },
+      : { color: SHELL_BG, symbolColor: '#5c5c66', height: 44 },
     trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 20 } : undefined,
     show: false,
     webPreferences: {

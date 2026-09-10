@@ -1,7 +1,8 @@
 # Signature
 
-A local-only trade journal for an iFVG model on NQ/MNQ. It runs on your machine,
-stores everything on disk, and never talks to a server you don't control.
+A local-only trade journal for an iFVG model on NQ/MNQ. It runs on your machine
+in its own window, stores everything on disk, and never talks to a server you
+don't control.
 
 It exists to expose **why** you take trades, not just what happened.
 
@@ -9,10 +10,18 @@ It exists to expose **why** you take trades, not just what happened.
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
+npm run desktop      # opens Signature in its own window
 ```
 
-The database and screenshot folders are created automatically on first boot.
+That's the normal way to run it. The Electron shell starts the local Next.js
+server on a free port, waits for it, and loads it into a frameless window — the
+server is owned by the window and shuts down with it, so nothing is left
+listening.
+
+If you'd rather use a browser tab, `npm run dev` serves the same app at
+http://localhost:3000.
+
+The database and screenshot folders are created automatically on first launch.
 There is no seed data.
 
 ## Where your data lives
@@ -22,30 +31,68 @@ Everything Signature owns is inside `./data`:
 ```
 data/
 ├── journal.db        SQLite database — every trade record
-└── screenshots/      chart images, foldered by month (2026-09/…)
+└── screenshots/      chart images, foldered by month
     └── 2026-09/
+        └── 2026-09-10-a3f1b2c4.png
 ```
 
 **Back up `./data` and you have backed up the entire journal.** Screenshots are
-stored as ordinary image files and referenced by relative path from the database —
-no image bytes are ever written into SQLite, so the `.db` file stays small and
-the images stay openable in any image viewer.
+ordinary image files referenced by relative path from the database — no image
+bytes are ever written into SQLite, so the `.db` stays small and the images stay
+openable in any viewer.
 
 `./data` is gitignored. Your trades never leave your machine.
+
+## Capturing a trade
+
+The fastest path is to copy a chart in TradingView and press **⌘V / Ctrl+V**
+anywhere on the New Trade page. Drag-and-drop and click-to-browse work too.
+
+Field order is deliberate: screenshot, then **reason**, then explanation. You
+name your motive before there is any data on screen to rationalise with. Submit
+stays disabled until there is an image, a reason, and 80 characters of
+explanation.
+
+## Appearance
+
+Signature opens in **light mode** and stays there — it does not follow your OS
+setting. The sun/moon button in the title bar switches to dark, and that choice
+is remembered per machine.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the app locally |
-| `npm run migrate` | Apply pending migrations without booting Next |
+| `npm run desktop` | Open Signature in its own window (the normal way to run it) |
+| `npm run dev` | Serve the same app in a browser tab instead |
+| `npm run migrate` | Apply pending migrations without launching the app |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run build` | Production build |
+| `npm run desktop:build` | Package a distributable app with electron-builder |
 
-Migrations in `db/migrations/` run automatically on boot, in filename order,
+Migrations in `db/migrations/` run automatically on launch, in filename order,
 each in its own transaction. Applied ones are recorded in `schema_migrations`.
+
+## How the data is protected
+
+The database enforces the model rather than trusting the app:
+
+- Every enum is a `CHECK` constraint, so an invalid `reason` or `outcome` cannot
+  be written by any code path.
+- The 80-character minimum on `explanation` is a constraint, not just form
+  validation.
+- `grade_total` and `grade_letter` are **generated columns** computed inside
+  SQLite from the three rubric scores. They cannot be written directly and can
+  never disagree with the scores that produced them.
+
+## A note on "Not taken"
+
+Trades you passed on are journalled and clustered like any other, but they never
+touch R or win rate — you didn't risk money, so it can't have made or lost any.
+They're reported separately as a `passed` count. Average grade *does* include
+them, because a passed A+ setup is still evidence about how you grade.
 
 ## Stack
 
 Next.js (App Router) + TypeScript · SQLite via better-sqlite3 · Tailwind CSS ·
-Framer Motion · @xyflow/react. No auth, no cloud, no telemetry. One user.
+Framer Motion · @xyflow/react · Electron. No auth, no cloud, no telemetry
+(Next's own anonymous telemetry is disabled too). One user.

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { GRADE_COLOR, gradeLetter, isBelowStandard, BELOW_STANDARD_PROMPT } from '@/lib/grade';
 import { spring, springBouncy } from '@/lib/motion';
 
-const AMBER = '251 191 36';
+const AMBER = 'var(--amber)';
 
 interface GradeBadgeProps {
   total: number;

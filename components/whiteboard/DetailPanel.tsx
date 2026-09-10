@@ -23,9 +23,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function Check({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px]"
-      style={{ color: on ? 'rgb(167 243 208)' : 'var(--text-faint)' }}>
+      style={{ color: on ? 'rgb(var(--grade-aplus))' : 'var(--text-faint)' }}>
       <span className="grid size-[14px] place-items-center rounded-full text-[8px]"
-        style={{ background: on ? 'rgb(167 243 208 / 0.18)' : 'var(--glass-fill)' }}>
+        style={{ background: on ? 'rgb(var(--grade-aplus) / 0.18)' : 'var(--glass-fill)' }}>
         {on ? '✓' : '·'}
       </span>
       {label}
@@ -181,7 +181,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                           className="glass w-32 rounded-[14px] px-3 py-2.5 text-[13px] outline-none"
                           style={{ color: 'var(--text)' }}
                         />
-                        <Button variant="primary" accent="134 239 172" onClick={settle} disabled={busy}>
+                        <Button variant="primary" accent="var(--outcome-win)" onClick={settle} disabled={busy}>
                           {busy ? 'Saving…' : 'Save'}
                         </Button>
                         <Button onClick={() => setSettling(false)}>Cancel</Button>

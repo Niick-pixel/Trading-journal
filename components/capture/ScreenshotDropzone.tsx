@@ -9,6 +9,8 @@ const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/a
 interface ScreenshotDropzoneProps {
   file: File | null;
   onFile: (file: File | null) => void;
+  /** When editing, the screenshot already on disk. Kept unless replaced. */
+  existingUrl?: string | null;
 }
 
 /**
@@ -19,7 +21,7 @@ interface ScreenshotDropzoneProps {
  *  2. Drag and drop.
  *  3. Click to browse.
  */
-export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
+export function ScreenshotDropzone({ file, onFile, existingUrl = null }: ScreenshotDropzoneProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,8 @@ export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
   };
 
   const active = dragging || pasteFlash;
+  // While editing, the stored screenshot stands in until a new one is pasted.
+  const shown = preview ?? existingUrl;
 
   return (
     <div>
@@ -98,7 +102,7 @@ export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
           overflow-hidden rounded-[24px] p-4"
       >
         <AnimatePresence mode="wait">
-          {preview ? (
+          {shown ? (
             <motion.div
               key="preview"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -108,7 +112,7 @@ export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
               className="relative w-full"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Chart screenshot" className="max-h-[420px] w-full rounded-[16px] object-contain" />
+              <img src={shown} alt="Chart screenshot" className="max-h-[420px] w-full rounded-[16px] object-contain" />
               <motion.button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onFile(null); }}
@@ -117,7 +121,9 @@ export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
                 transition={spring}
                 aria-label="Remove screenshot"
                 className="glass absolute right-2.5 top-2.5 grid size-8 place-items-center rounded-full text-[15px]"
-                style={{ color: 'var(--text-dim)' }}
+                // Only a newly chosen file can be cleared; the stored one is
+                // replaced by pasting over it, never emptied to nothing.
+                style={{ color: 'var(--text-dim)', display: preview ? undefined : 'none' }}
               >
                 ×
               </motion.button>
@@ -168,7 +174,7 @@ export function ScreenshotDropzone({ file, onFile }: ScreenshotDropzoneProps) {
           <motion.p
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={spring}
-            className="mt-2 text-[12px]" style={{ color: 'rgb(248 113 113)' }}
+            className="mt-2 text-[12px]" style={{ color: 'rgb(var(--outcome-loss))' }}
           >
             {error}
           </motion.p>

@@ -11,11 +11,11 @@ import type { Trade } from '@/lib/types';
 
 /** Border colour carries the outcome. Nothing else on the card does. */
 export const OUTCOME_COLOR: Record<Outcome, string> = {
-  Win: '134 239 172',
-  Loss: '248 113 113',
-  Breakeven: '148 163 184',
-  Scratched: '148 163 184',
-  'Not taken': '100 100 112',
+  Win: 'var(--outcome-win)',
+  Loss: 'var(--outcome-loss)',
+  Breakeven: 'var(--outcome-neutral)',
+  Scratched: 'var(--outcome-neutral)',
+  'Not taken': 'var(--outcome-passed)',
 };
 
 export type TradeNodeData = { trade: Trade; selected: boolean; onOpen: (id: string) => void };

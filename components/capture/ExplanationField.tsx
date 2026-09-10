@@ -54,7 +54,7 @@ export function ExplanationField({
       {required && (
         <div className="mt-2 flex items-center justify-between gap-4 text-[11px] tabular-nums">
           <motion.span
-            animate={{ color: met ? 'var(--text-faint)' : 'rgb(251 191 36)' }}
+            animate={{ color: met ? 'var(--text-faint)' : 'rgb(var(--amber))' }}
             transition={spring}
           >
             {met ? 'Minimum met' : `${remaining} more character${remaining === 1 ? '' : 's'}`}
