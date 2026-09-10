@@ -10,9 +10,13 @@ It exists to expose **why** you take trades, not just what happened.
 
 ### 1. Install Node.js (once per machine)
 
-Signature needs **Node 20.9 or newer**. `npm` comes bundled with it — if your
+Signature needs **Node 24 or newer**. `npm` comes bundled with it — if your
 terminal says `'npm' is not recognized` or `command not found`, Node is what's
 missing.
+
+Nothing here compiles. Signature stores data with `node:sqlite`, which is built
+into Node itself, so there is no C++ toolchain to install and no native module
+to rebuild — `npm install` just downloads files.
 
 **Windows** (PowerShell):
 
@@ -46,9 +50,12 @@ npm install
 npm run desktop      # opens Signature in its own window
 ```
 
-`npm install` downloads Electron (~230 MB) and builds `better-sqlite3` as a
-native module, so the first install takes a few minutes and needs a working
-network. Every run after that is offline.
+`npm install` downloads Electron (~230 MB), so the first install takes a few
+minutes and needs a working network. Every run after that is offline.
+
+The window runs the app on Electron's own bundled Node, so once installed it
+does not depend on your system Node at all. The Node 24 requirement above only
+applies to `npm install` and to `npm run dev`.
 
 If the window won't open for any reason, `npm run dev` serves the identical app
 at <http://localhost:3000> and needs no Electron binary at all.
@@ -133,6 +140,7 @@ them, because a passed A+ setup is still evidence about how you grade.
 
 ## Stack
 
-Next.js (App Router) + TypeScript · SQLite via better-sqlite3 · Tailwind CSS ·
-Framer Motion · @xyflow/react · Electron. No auth, no cloud, no telemetry
-(Next's own anonymous telemetry is disabled too). One user.
+Next.js (App Router) + TypeScript · SQLite via `node:sqlite` (built into Node —
+no native addon) · Tailwind CSS · Framer Motion · @xyflow/react · Electron.
+No auth, no cloud, no telemetry (Next's own anonymous telemetry is disabled
+too). One user.

@@ -3,7 +3,7 @@
 // the server dies with the window.
 
 const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
-const { spawn, spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const path = require('node:path');
 const net = require('node:net');
 
@@ -56,44 +56,32 @@ function waitForServer(port, timeoutMs = 120_000) {
   });
 }
 
-/**
- * Resolve a Node binary to run the Next server with.
- *
- * This matters more than it looks: better-sqlite3 is a native module compiled
- * against system Node's ABI. Electron bundles its own Node at a different ABI,
- * so running the server under ELECTRON_RUN_AS_NODE would demand an
- * electron-rebuild step for every Electron upgrade. The database is only ever
- * touched by the Next server process, never by Electron's main or renderer —
- * so we spawn that process with real Node and the ABI problem disappears.
- */
-function resolveNode() {
-  const candidates = process.platform === 'win32' ? ['node.exe', 'node'] : ['node'];
-  for (const candidate of candidates) {
-    const found = spawnSync(candidate, ['--version'], { stdio: 'ignore' });
-    if (!found.error) return candidate;
-  }
-  return null;
-}
-
 function startNext(port) {
   const bin = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
-  const node = resolveNode();
 
-  // Falling back to Electron-as-Node keeps the app launchable, but the native
-  // sqlite binding will only load if it was rebuilt for Electron's ABI.
-  const command = node ?? process.execPath;
-  const env = { ...process.env, NODE_ENV: isDev ? 'development' : 'production' };
-  if (!node) env.ELECTRON_RUN_AS_NODE = '1';
-
-  nextServer = spawn(command, [bin, isDev ? 'dev' : 'start', '-p', String(port)], {
+  // Run the server on Electron's own bundled Node (24.x), not a system install.
+  //
+  // This used to shell out to whatever `node` was on PATH, because the database
+  // was a native addon compiled against system Node's ABI. Now that SQLite comes
+  // from node:sqlite — built into the runtime — that constraint is gone, and
+  // using Electron's Node means the app depends on nothing outside its own
+  // folder. That is what makes a portable build possible.
+  nextServer = spawn(process.execPath, [bin, isDev ? 'dev' : 'start', '-p', String(port)], {
     cwd: ROOT,
-    env,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      NODE_ENV: isDev ? 'development' : 'production',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+
+  // Keep the tail of the server's output so a startup failure can explain itself.
   const record = (d) => {
     serverLog.push(String(d));
     if (serverLog.length > 40) serverLog.shift();
   };
+
   nextServer.stdout.on('data', (d) => { record(d); process.stdout.write(`[next] ${d}`); });
   nextServer.stderr.on('data', (d) => { record(d); process.stderr.write(`[next] ${d}`); });
   nextServer.on('exit', (code) => {

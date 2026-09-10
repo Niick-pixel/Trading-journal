@@ -1,5 +1,6 @@
 import 'server-only';
 import crypto from 'node:crypto';
+import type { SQLInputValue } from 'node:sqlite';
 import { getDb } from './index';
 import { deleteScreenshot } from './screenshots';
 import type { SettleInput, Trade, TradeFilters, TradeInput } from '../lib/types';
@@ -19,9 +20,16 @@ function hydrate(row: Row): Trade {
   return trade;
 }
 
-/** SQLite has no boolean type, so every flag goes in and comes out as 0/1. */
-function flatten(input: TradeInput) {
-  const out: Record<string, unknown> = { ...input };
+/**
+ * SQLite has no boolean type, so every flag goes in and comes out as 0/1.
+ * node:sqlite only binds null, number, bigint, string and Uint8Array, so
+ * undefined has to become null on the way in as well.
+ */
+function flatten(input: TradeInput): Record<string, SQLInputValue> {
+  const out: Record<string, SQLInputValue> = {};
+  for (const [key, value] of Object.entries(input)) {
+    out[key] = value === undefined ? null : (value as SQLInputValue);
+  }
   for (const col of BOOL_COLUMNS) out[col] = input[col] ? 1 : 0;
   return out;
 }
@@ -51,7 +59,7 @@ export function getTrade(id: string): Trade | null {
 
 export function listTrades(filters: TradeFilters = {}): Trade[] {
   const where: string[] = [];
-  const params: Record<string, unknown> = {};
+  const params: Record<string, SQLInputValue> = {};
 
   if (filters.from) { where.push('date >= @from'); params.from = filters.from; }
   if (filters.to) { where.push('date <= @to'); params.to = filters.to; }

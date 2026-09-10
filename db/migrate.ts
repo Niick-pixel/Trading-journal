@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type BetterSqlite3 from 'better-sqlite3';
+import type { DatabaseSync } from 'node:sqlite';
 import { DATA_DIR, SCREENSHOTS_DIR } from '../lib/paths';
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'db', 'migrations');
@@ -10,7 +10,7 @@ const MIGRATIONS_DIR = path.join(process.cwd(), 'db', 'migrations');
  * its own transaction. Runs on boot; a fresh checkout with no ./data gets a
  * complete database and nothing else — no seed data, by design.
  */
-export function migrate(db: BetterSqlite3.Database): void {
+export function migrate(db: DatabaseSync): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
@@ -35,10 +35,18 @@ export function migrate(db: BetterSqlite3.Database): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    db.transaction(() => {
+
+    // node:sqlite has no transaction() helper, so drive it by hand — and roll
+    // back on failure so a half-applied migration can never be recorded.
+    db.exec('BEGIN');
+    try {
       db.exec(sql);
       record.run(file);
-    })();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
     console.log(`[signature] applied migration ${file}`);
   }
 }

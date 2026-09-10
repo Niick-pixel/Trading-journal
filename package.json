@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",
-    "better-sqlite3": "^13.0.3",
     "framer-motion": "^13.2.0",
     "next": "^16.3.4",
     "react": "^19.3.0",
@@ -25,7 +24,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -44,6 +42,6 @@
     }
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.0.0"
   }
 }
