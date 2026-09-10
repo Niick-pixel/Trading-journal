@@ -323,6 +323,31 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   opacity: 0.55;
 }
 
+/*
+  React Flow's attribution. It stays visible — the library is free to use on the
+  condition that it is — but its default styling is a hardcoded #999 on a
+  50%-white slab, which lands as a pale grey block in dark mode and is close to
+  illegible in both (roughly 1.4:1 against its own background).
+
+  This restyles it into the app's own language and, importantly, raises the
+  contrast rather than lowering it: the point of keeping the credit is that
+  somebody can read it.
+*/
+.react-flow__attribution {
+  background: transparent !important;
+  padding: 4px 10px !important;
+}
+.react-flow__attribution a {
+  color: var(--text-dim) !important;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+.react-flow__attribution a:hover {
+  color: var(--text) !important;
+  text-decoration: underline;
+}
+
 /* The desktop shell hides the native title bar; keep content clear of it and
    give the empty strip a drag region so the window still moves. */
 .titlebar-drag {

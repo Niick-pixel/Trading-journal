@@ -150,7 +150,6 @@ function WhiteboardInner({ trades: initial }: { trades: Trade[] }) {
         fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
         minZoom={0.12}
         maxZoom={2.2}
-        proOptions={{ hideAttribution: true }}
         nodesConnectable={false}
         elementsSelectable={false}
         panOnScroll
