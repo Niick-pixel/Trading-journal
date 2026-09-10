@@ -53,10 +53,14 @@ export default function StatsPage() {
         <div className="mx-auto w-full max-w-[62rem] px-6 pb-20 pt-4">
           <header className="mb-7">
             <h1 className="text-[22px] font-semibold tracking-tight">Stats</h1>
-            <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
-              {all.taken} taken · {pct(all.winRate)} win rate · {r(all.totalR)}
-              {all.passed > 0 && ` · ${all.passed} passed`}
-            </p>
+            {/* "0 taken · — win rate · 0.0R" says nothing the empty state below
+                doesn't say better. */}
+            {trades.length > 0 && (
+              <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
+                {all.taken} taken · {pct(all.winRate)} win rate · {r(all.totalR)}
+                {all.passed > 0 && ` · ${all.passed} passed`}
+              </p>
+            )}
           </header>
 
           {trades.length === 0 ? (
