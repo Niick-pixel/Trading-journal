@@ -1,0 +1,150 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { press, spring } from '@/lib/motion';
+import { SHOT_SLOTS, type ShotSlot } from '@/lib/domain';
+import type { TradeShot } from '@/lib/types';
+import { Lightbox } from './Lightbox';
+
+const url = (path: string) => `/api/screenshots/${path}`;
+
+/**
+ * Every chart for one trade, in the order it is read.
+ *
+ * The first image is the one the capture form required and cannot be removed —
+ * a trade without its chart is a record you cannot check. Everything after it
+ * is optional and can be added later, which is the point: the HTF frame and
+ * the result are usually available at different times from the entry.
+ */
+export function ShotGallery({ tradeId, editable = true }: { tradeId: string; editable?: boolean }) {
+  const [shots, setShots] = useState<TradeShot[] | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => fetch(`/api/trades/${tradeId}/shots`).then((r) => r.json()).then(setShots);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tradeId]);
+
+  async function add(file: File, slot: ShotSlot) {
+    setBusy(true); setError(null);
+    const body = new FormData();
+    body.append('screenshot', file);
+    body.append('slot', slot);
+    const res = await fetch(`/api/trades/${tradeId}/shots`, { method: 'POST', body });
+    if (!res.ok) setError((await res.json()).error ?? 'Could not add that image.');
+    await load();
+    setBusy(false);
+  }
+
+  async function remove(id: string) {
+    setBusy(true); setError(null);
+    const res = await fetch(`/api/trades/${tradeId}/shots?shot=${id}`, { method: 'DELETE' });
+    if (!res.ok) setError((await res.json()).error ?? 'Could not remove that image.');
+    await load();
+    setBusy(false);
+  }
+
+  async function relabel(id: string, slot: ShotSlot) {
+    await fetch(`/api/trades/${tradeId}/shots`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, slot }),
+    });
+    await load();
+  }
+
+  if (!shots) return null;
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2.5">
+        {shots.map((shot, i) => (
+          <div key={shot.id} className="group relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url(shot.path)}
+              alt={shot.slot}
+              onClick={() => setOpen(i)}
+              className="size-24 cursor-zoom-in rounded-[12px] object-cover"
+              style={{ background: 'var(--letterbox)', border: '1px solid var(--glass-stroke)' }}
+            />
+            <span
+              className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded-[7px] px-1.5 py-0.5 text-center text-[9px]"
+              style={{ background: 'var(--glass-fill-strong)', color: 'var(--text-dim)' }}
+            >
+              {shot.slot}
+            </span>
+
+            {editable && (
+              <div className="absolute inset-x-0 -top-2 flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+                <select
+                  value={shot.slot}
+                  onChange={(e) => relabel(shot.id, e.target.value as ShotSlot)}
+                  className="mr-1 rounded-[7px] px-1 py-0.5 text-[9px]"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--glass-stroke)', color: 'var(--text-dim)' }}
+                >
+                  {SHOT_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {shots.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Remove the ${shot.slot} chart`}
+                    onClick={() => remove(shot.id)}
+                    disabled={busy}
+                    className="grid size-5 place-items-center rounded-full text-[10px]"
+                    style={{ background: 'rgb(var(--outcome-loss) / 0.9)', color: 'white' }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {editable && (
+          <label
+            className="grid size-24 cursor-pointer place-items-center rounded-[12px] text-center text-[10px] leading-tight"
+            style={{
+              border: '1px dashed var(--glass-stroke)',
+              background: 'var(--glass-fill)',
+              color: 'var(--text-faint)',
+            }}
+          >
+            <motion.span whileTap={press} transition={spring}>
+              {busy ? 'Adding…' : '+ Add chart'}
+            </motion.span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                // The next empty slot in reading order, so the common case is
+                // paste-paste-paste with no labelling at all.
+                const used = new Set(shots.map((s) => s.slot));
+                const next = SHOT_SLOTS.find((s) => !used.has(s)) ?? 'Other';
+                if (f) add(f, next);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <p className="mt-2 text-[11px]" style={{ color: 'rgb(var(--outcome-loss))' }}>{error}</p>
+      )}
+
+      <Lightbox
+        src={open != null && shots[open] ? url(shots[open].path) : null}
+        alt={open != null && shots[open] ? shots[open].slot : 'Chart'}
+        caption={open != null && shots[open] ? `${shots[open].slot} · ${open + 1} of ${shots.length}` : undefined}
+        onClose={() => setOpen(null)}
+        onPrev={shots.length > 1 ? () => setOpen((i) => ((i ?? 0) - 1 + shots.length) % shots.length) : undefined}
+        onNext={shots.length > 1 ? () => setOpen((i) => ((i ?? 0) + 1) % shots.length) : undefined}
+      />
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
-import { byReason, leakPairs, type Group } from './stats';
+import { aggregate, byReason, leakPairs } from './stats';
 import { REASONS, type Reason } from './domain';
+import { gradeLetter } from './grade';
 import type { Trade } from './types';
 import type { Aggregate } from './stats';
 
@@ -36,6 +37,27 @@ function seeded(id: string, salt: number): number {
   return ((h >>> 0) % 10000) / 10000;
 }
 
+/**
+ * What the board groups by.
+ *
+ * Reason is the default and the reason this screen exists, but the same
+ * clustering answers different questions: grouped by mistake tag it shows
+ * which error repeats, by month it shows whether any of this is improving.
+ */
+export const GROUP_MODES = [
+  'reason', 'mistake', 'grade', 'setup', 'target', 'month',
+] as const;
+export type GroupMode = (typeof GROUP_MODES)[number];
+
+export const GROUP_LABELS: Record<GroupMode, string> = {
+  reason: 'Reason',
+  mistake: 'Mistake',
+  grade: 'Grade',
+  setup: 'Setup',
+  target: 'Target',
+  month: 'Month',
+};
+
 export interface PositionedTrade {
   trade: Trade;
   x: number;
@@ -44,6 +66,10 @@ export interface PositionedTrade {
 }
 
 export interface PositionedCluster {
+  /** The group's own label — a reason, a tag, a month. */
+  key: string;
+  /** Hue for the cluster. Reason keeps its identity colour; others cycle. */
+  accent: string;
   reason: Reason;
   stats: Aggregate;
   x: number;
@@ -80,8 +106,61 @@ function clusterGrid(count: number, scale: number) {
  * top-left, where you look first. That placement is the entire argument for
  * this screen existing.
  */
-export function computeLayout(trades: Trade[], scale = 1): BoardLayout {
-  const groups: Group<Reason>[] = byReason(trades).sort((a, b) => a.stats.totalR - b.stats.totalR);
+interface BoardGroup { key: string; reason: Reason; accent: string; stats: Aggregate; trades: Trade[] }
+
+/**
+ * Buckets the trades for whichever mode the board is in.
+ *
+ * A trade with three mistake tags appears in three clusters under 'mistake' —
+ * that is correct and deliberate: the point of grouping by mistake is to see
+ * every trade each error touched, not to force one label per trade.
+ */
+function groupsFor(trades: Trade[], mode: GroupMode): BoardGroup[] {
+  if (mode === 'reason') {
+    return byReason(trades)
+      .sort((a, b) => a.stats.totalR - b.stats.totalR)
+      .map((g) => ({
+        key: g.key, reason: g.key, accent: reasonAccent(g.key), stats: g.stats, trades: g.trades,
+      }));
+  }
+
+  const buckets = new Map<string, Trade[]>();
+  const put = (key: string, t: Trade) => {
+    const list = buckets.get(key) ?? [];
+    list.push(t);
+    buckets.set(key, list);
+  };
+
+  for (const t of trades) {
+    if (mode === 'mistake') {
+      if (t.mistake_tags.length === 0) put('No mistake tagged', t);
+      else for (const tag of t.mistake_tags) put(tag, t);
+    } else if (mode === 'grade') {
+      put(gradeLetter(t.checklist_score), t);
+    } else if (mode === 'setup') {
+      put(t.setup_type, t);
+    } else if (mode === 'target') {
+      put(t.target_type, t);
+    } else {
+      put(t.date.slice(0, 7), t);
+    }
+  }
+
+  return [...buckets]
+    .map(([key, list], i) => ({
+      key,
+      // The nodes keep their own reason hue; the cluster takes a cycled one so
+      // adjacent regions stay distinguishable.
+      reason: list[0].reason,
+      accent: `var(--reason-${i % 12})`,
+      stats: aggregate(list),
+      trades: list,
+    }))
+    .sort((a, b) => (mode === 'month' ? a.key.localeCompare(b.key) : a.stats.totalR - b.stats.totalR));
+}
+
+export function computeLayout(trades: Trade[], scale = 1, mode: GroupMode = 'reason'): BoardLayout {
+  const groups = groupsFor(trades, mode);
 
   const clusters: PositionedCluster[] = [];
   const nodes: PositionedTrade[] = [];
@@ -117,7 +196,7 @@ export function computeLayout(trades: Trade[], scale = 1): BoardLayout {
 
       placed.push({
         trade,
-        reason: group.key,
+        reason: trade.reason,
         // A stored position always wins: once a trade has been drawn it keeps
         // its spot, so adding a later trade never rearranges the board.
         x: trade.position_x ?? cursorX + PAD + col * (nodeW + GAP_X) + jitterX,
@@ -145,7 +224,10 @@ export function computeLayout(trades: Trade[], scale = 1): BoardLayout {
     const width = Math.max(MIN_CLUSTER_W, maxX - minX + PAD * 2);
     const height = maxY - minY + HEADER_H + PAD;
 
-    clusters.push({ reason: group.key, stats: group.stats, x, y, width, height, trades: group.trades });
+    clusters.push({
+      key: group.key, accent: group.accent, reason: group.reason,
+      stats: group.stats, x, y, width, height, trades: group.trades,
+    });
 
     cursorX += grid.width + CLUSTER_GAP;
     rowHeight = Math.max(rowHeight, grid.height);

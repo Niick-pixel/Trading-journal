@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Background, BackgroundVariant, ReactFlow, ReactFlowProvider,
+  Background, BackgroundVariant, ReactFlow, ReactFlowProvider, ViewportPortal,
   type Edge, type Node, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { AnimatePresence, motion } from 'framer-motion';
-import { computeLayout, reasonAccent, NODE_H, NODE_W } from '@/lib/layout';
+import {
+  computeLayout, reasonAccent, GROUP_LABELS, GROUP_MODES, NODE_H, NODE_W, type GroupMode,
+} from '@/lib/layout';
 import { spring, springBouncy } from '@/lib/motion';
-import type { Trade } from '@/lib/types';
+import type { BoardEdge, BoardNote, Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { DENSITY_SCALE } from '@/lib/preferences';
@@ -18,6 +20,8 @@ import { ClusterNode } from './ClusterNode';
 import { DetailPanel } from './DetailPanel';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { BulkBar } from './BulkBar';
+import { RiskBanner } from './RiskBanner';
+import { StickyNotes } from './StickyNotes';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
 const nodeTypes = { trade: TradeNode, cluster: ClusterNode };
@@ -30,8 +34,28 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   // An explicit mode rather than React Flow's own selection: on this board a
   // click already means "open this trade", and overloading it with
   // shift-to-select made both gestures unreliable.
+  // The same clustering answers different questions: by mistake tag it shows
+  // which error repeats, by month whether any of this is improving.
+  const [groupMode, setGroupMode] = useState<GroupMode>('reason');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const [board, setBoard] = useState<{ notes: BoardNote[]; edges: BoardEdge[] }>({ notes: [], edges: [] });
+  const loadBoard = useCallback(async () => {
+    const res = await fetch('/api/board');
+    if (res.ok) setBoard(await res.json());
+  }, []);
+  useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  /** A note lands where the viewport is, not at the origin of a huge board. */
+  const addNote = useCallback(async () => {
+    await fetch('/api/board', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'note', body: '', x: 40, y: 40 }),
+    });
+    await loadBoard();
+  }, [loadBoard]);
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/trades');
@@ -42,7 +66,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   const scale = DENSITY_SCALE[prefs.boardDensity];
 
   const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
-  const layout = useMemo(() => computeLayout(visible, scale), [visible, scale]);
+  const layout = useMemo(() => computeLayout(visible, scale, groupMode), [visible, scale, groupMode]);
 
   const onOpen = useCallback((id: string) => {
     if (readOnly) return;
@@ -66,6 +90,24 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     await refresh();
   }, [selectedIds, refresh]);
 
+  /**
+   * A link the app could never have inferred — "same mistake as this one".
+   * Two selected trades is the whole gesture.
+   */
+  const linkSelected = useCallback(async () => {
+    const [from, to] = [...selectedIds];
+    if (!from || !to) return;
+    const label = window.prompt('Why are these two linked?', 'same mistake as this');
+    if (label === null) return;
+    await fetch('/api/board', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'edge', from_id: from, to_id: to, label }),
+    });
+    await loadBoard();
+    setSelectedIds(new Set());
+  }, [selectedIds, loadBoard]);
+
   const leaveSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
@@ -73,10 +115,10 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
 
   const nodes = useMemo<Node[]>(() => {
     const clusterNodes: Node[] = layout.clusters.map((cluster, index) => ({
-      id: `cluster-${cluster.reason}`,
+      id: `cluster-${cluster.key}`,
       type: 'cluster',
       position: { x: cluster.x, y: cluster.y },
-      data: { cluster, accent: reasonAccent(cluster.reason), index },
+      data: { cluster, accent: cluster.accent, index },
       draggable: false,
       selectable: false,
       zIndex: 0,
@@ -137,11 +179,30 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
       zIndex: 2,
     }));
 
+    /*
+      Links I drew by hand. Always shown and never filtered away with the
+      derived ones: a connection I made deliberately is the most valuable line
+      on this board precisely because the app could not have found it.
+    */
+    const manual: Edge[] = board.edges
+      .filter((e) => visible.some((t) => t.id === e.from_id) && visible.some((t) => t.id === e.to_id))
+      .map((e) => ({
+        id: `m-${e.id}`,
+        source: e.from_id, target: e.to_id, type: 'default',
+        label: e.label ?? undefined,
+        labelStyle: { fill: 'var(--text-dim)', fontSize: 10 },
+        labelBgStyle: { fill: 'var(--bg-raised)' },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 6,
+        style: { stroke: 'rgb(var(--accent) / 0.75)', strokeWidth: 2 },
+      }));
+
     return [
       ...(prefs.showReasonEdges ? within : []),
       ...(prefs.showLeakEdges ? leaks : []),
+      ...manual,
     ];
-  }, [layout, prefs.showReasonEdges, prefs.showLeakEdges]);
+  }, [layout, prefs.showReasonEdges, prefs.showLeakEdges, board.edges, visible]);
 
   // Persist a drag so a manual arrangement survives a reload.
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -235,6 +296,9 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           including their headers — which are the point of the screen. */}
       {!readOnly && (
         <div className="shrink-0 px-4 pb-2">
+          <div className="mb-2 flex justify-center">
+            <RiskBanner trades={trades} />
+          </div>
           <Toolbar
             filters={filters}
             onChange={setFilters}
@@ -242,6 +306,10 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
             total={trades.length}
             selectMode={selectMode}
             onToggleSelectMode={() => (selectMode ? leaveSelectMode() : setSelectMode(true))}
+            groupMode={groupMode}
+            onGroupMode={setGroupMode}
+            onAddNote={addNote}
+            onLinkSelected={selectedIds.size === 2 ? linkSelected : undefined}
           />
         </div>
       )}
@@ -281,6 +349,9 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         {prefs.showGrid && (
           <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
         )}
+        <ViewportPortal>
+          <StickyNotes notes={board.notes} onChanged={loadBoard} />
+        </ViewportPortal>
       </ReactFlow>
 
       {/* Filtering to nothing used to leave a blank canvas with no explanation. */}

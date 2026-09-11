@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { OUTCOMES, SESSIONS, type Outcome, type Session } from '@/lib/domain';
 import { ACCOUNTS, type Account } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
+import { GROUP_LABELS, GROUP_MODES, type GroupMode } from '@/lib/layout';
 import { hasOpenFlags } from '@/lib/flags';
 import type { Trade } from '@/lib/types';
 import { press, spring, springBouncy } from '@/lib/motion';
@@ -95,7 +96,8 @@ function Chip({
 }
 
 export function Toolbar({
-  filters, onChange, shown, total, selectMode, onToggleSelectMode,
+  filters, onChange, shown, total, selectMode, onToggleSelectMode, groupMode, onGroupMode,
+  onAddNote, onLinkSelected,
 }: {
   filters: Filters;
   onChange: (next: Filters) => void;
@@ -103,6 +105,11 @@ export function Toolbar({
   total: number;
   selectMode: boolean;
   onToggleSelectMode: () => void;
+  groupMode: GroupMode;
+  onGroupMode: (m: GroupMode) => void;
+  onAddNote: () => void;
+  /** Only offered when exactly two trades are selected. */
+  onLinkSelected?: () => void;
 }) {
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -114,6 +121,15 @@ export function Toolbar({
       transition={spring}
       className="glass pointer-events-auto flex flex-wrap items-center gap-x-5 gap-y-2.5 rounded-[20px] px-4 py-2.5"
     >
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+          Group
+        </span>
+        {GROUP_MODES.map((m) => (
+          <Chip key={m} label={GROUP_LABELS[m]} active={groupMode === m} onClick={() => onGroupMode(m)} />
+        ))}
+      </div>
+
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>Outcome</span>
         {OUTCOMES.map((o) => (
@@ -206,6 +222,9 @@ export function Toolbar({
       >
         {selectMode ? 'Selecting' : 'Select'}
       </motion.button>
+
+      <Chip label="+ Note" active={false} onClick={onAddNote} />
+      {onLinkSelected && <Chip label="Link these two" active onClick={onLinkSelected} />}
 
       <div className="ml-auto flex items-center gap-3">
         <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>

@@ -13,7 +13,17 @@ const STEPS = [1, 1.5, 2, 3, 4] as const;
  * only works if the screenshot can be opened and zoomed. Click or scroll to
  * zoom, drag to pan, Escape to close.
  */
-export function Lightbox({ src, alt, onClose }: { src: string | null; alt: string; onClose: () => void }) {
+interface LightboxProps {
+  src: string | null;
+  alt: string;
+  onClose: () => void;
+  /** Optional gallery — arrow keys step through it. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  caption?: string;
+}
+
+export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: LightboxProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
@@ -37,10 +47,14 @@ export function Lightbox({ src, alt, onClose }: { src: string | null; alt: strin
       if (e.key === '+' || e.key === '=') setZoom((z) => Math.min(6, z * 1.3));
       if (e.key === '-') setZoom((z) => Math.max(1, z / 1.3));
       if (e.key === '0') { setZoom(1); setPan({ x: 0, y: 0 }); }
+      // Arrow keys walk the gallery. Only meaningful when zoomed out, where
+      // they are not already panning the image.
+      if (e.key === 'ArrowLeft' && onPrev) { onPrev(); }
+      if (e.key === 'ArrowRight' && onNext) { onNext(); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [src, onClose]);
+  }, [src, onClose, onPrev, onNext]);
 
   return (
     <AnimatePresence>
@@ -71,11 +85,35 @@ export function Lightbox({ src, alt, onClose }: { src: string | null; alt: strin
             draggable={false}
           />
 
+          {onPrev && (
+            <button
+              type="button"
+              aria-label="Previous chart"
+              onClick={(e) => { e.stopPropagation(); onPrev(); }}
+              className="glass absolute left-5 grid size-11 place-items-center rounded-full text-[18px]"
+              style={{ color: 'var(--text)' }}
+            >
+              ‹
+            </button>
+          )}
+          {onNext && (
+            <button
+              type="button"
+              aria-label="Next chart"
+              onClick={(e) => { e.stopPropagation(); onNext(); }}
+              className="glass absolute right-5 grid size-11 place-items-center rounded-full text-[18px]"
+              style={{ color: 'var(--text)' }}
+            >
+              ›
+            </button>
+          )}
+
           <div
             className="glass pointer-events-none absolute bottom-6 rounded-full px-4 py-2 text-[11px]"
             style={{ color: 'var(--text-dim)' }}
           >
-            {Math.round(zoom * 100)}% · click to zoom · scroll to adjust · drag to pan · Esc to close
+            {caption ? `${caption} · ` : ''}{Math.round(zoom * 100)}% · click to zoom · scroll to adjust
+            {(onPrev || onNext) && ' · ← → for the other charts'} · Esc to close
           </div>
         </motion.div>
       )}

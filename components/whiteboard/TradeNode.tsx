@@ -126,6 +126,23 @@ function TradeNodeInner({ data }: NodeProps) {
         {gradeLetter(trade.checklist_score)}
       </div>
 
+      {/* The first mistake tag, on the card. Which error repeats is the thing
+          the board is for, and it should be readable without opening anything. */}
+      {trade.mistake_tags.length > 0 && (
+        <span
+          className="absolute left-2 top-8 max-w-[85%] truncate rounded-full px-2 py-0.5 text-[9px] font-medium"
+          style={{
+            color: 'rgb(var(--outcome-loss))',
+            background: 'rgba(10,10,12,0.62)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgb(var(--outcome-loss) / 0.4)',
+          }}
+        >
+          {trade.mistake_tags[0]}
+          {trade.mistake_tags.length > 1 && ` +${trade.mistake_tags.length - 1}`}
+        </span>
+      )}
+
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
         <div className="flex items-center gap-1.5">
           <motion.span

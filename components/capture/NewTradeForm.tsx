@@ -69,6 +69,13 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
   const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
   const [riskPercent, setRiskPercent] = useState(trade?.risk_percent?.toString() ?? '');
+  const [entryTime, setEntryTime] = useState(trade?.entry_time ?? '');
+  const [exitTime, setExitTime] = useState(trade?.exit_time ?? '');
+  const [maeR, setMaeR] = useState(trade?.mae_r?.toString() ?? '');
+  const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
+  const [reached1R, setReached1R] = useState<Tri>(trade?.reached_1r ?? null);
+  const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
+  const [wouldBeR, setWouldBeR] = useState(trade?.would_be_r?.toString() ?? '');
   const [entryPrice, setEntryPrice] = useState(trade?.entry_price?.toString() ?? '');
   const [takeProfit, setTakeProfit] = useState(trade?.take_profit?.toString() ?? '');
   const [stopLoss, setStopLoss] = useState(trade?.stop_loss?.toString() ?? '');
@@ -164,6 +171,12 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       skip_reason: skipReason,
       contracts: num(contracts), risk_dollars: num(riskDollars), risk_percent: num(riskPercent),
       stop_points: num(stopPoints),
+      entry_time: entryTime || null, exit_time: exitTime || null,
+      mae_r: num(maeR), mfe_r: num(mfeR), mae_points: null, mfe_points: null,
+      reached_1r: reached1R,
+      confidence_at_entry: confidence,
+      would_be_r: num(wouldBeR),
+      playbook_id: null,
       // A plan has no result. Storing one would be inventing a trade.
       outcome: planned ? 'Not taken' : outcome,
       r_multiple: planned ? null : num(rMultiple),
@@ -352,6 +365,36 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           </div>
 
           <Checklist answers={checks} onChange={setCheck} accent={accent} />
+
+          {/*
+            Recorded here, beside the score, because it only measures anything
+            if it is set before the outcome is known. Answered afterwards it is
+            just the result wearing a different hat.
+          */}
+          <div className="mt-6">
+            <Field label="Confidence at entry" hint="Optional. Only worth anything if you set it before you knew.">
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <motion.button
+                    key={n}
+                    type="button"
+                    aria-pressed={confidence === n}
+                    onClick={() => setConfidence(confidence === n ? null : n)}
+                    whileTap={press}
+                    transition={spring}
+                    animate={{
+                      borderColor: confidence === n ? `rgb(${accent} / 0.6)` : 'var(--glass-stroke)',
+                      background: confidence === n ? `rgb(${accent} / 0.12)` : 'var(--glass-fill)',
+                    }}
+                    className="flex-1 rounded-[12px] border py-2 text-[13px] font-medium"
+                    style={{ color: confidence === n ? `rgb(${accent})` : 'var(--text-faint)' }}
+                  >
+                    {'★'.repeat(n)}
+                  </motion.button>
+                ))}
+              </div>
+            </Field>
+          </div>
         </div>
 
         {/* 6 — the rest. Not hidden behind a disclosure any more: every one of
@@ -432,6 +475,34 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                 value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} /></Field>
             </div>
 
+            {/*
+              Excursion. How far it went against me before it worked, and how
+              far in my favour before it turned — the fastest way to learn
+              whether the stop is too tight or the target too greedy, which no
+              win rate will ever tell me.
+            */}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Entry time" hint="Optional"><Input type="time" value={entryTime}
+                onChange={(e) => setEntryTime(e.target.value)} /></Field>
+              <Field label="Exit time" hint="Optional"><Input type="time" value={exitTime}
+                onChange={(e) => setExitTime(e.target.value)} /></Field>
+              <Field label="MAE (R)" hint="Worst it went against you. Negative.">
+                <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                  value={maeR} onChange={(e) => setMaeR(e.target.value)} />
+              </Field>
+              <Field label="MFE (R)" hint="Best it got before it turned.">
+                <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                  value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
+              </Field>
+            </div>
+
+            <TriState
+              value={reached1R}
+              onChange={setReached1R}
+              label="Reached +1R before the stop?"
+              hint="If most of your losers did, the problem is management rather than selection."
+            />
+
             {/* After the close: the honest part. */}
             <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
               <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
@@ -472,6 +543,10 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                       />
                     </Field>
                     <div className="grid gap-5 sm:grid-cols-2">
+                      <Field label="What it would have paid (R)" hint="Go and check. A guess here is worse than a blank.">
+                        <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                          value={wouldBeR} onChange={(e) => setWouldBeR(e.target.value)} />
+                      </Field>
                       <Field label="R left on the table">
                         <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
                           value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />

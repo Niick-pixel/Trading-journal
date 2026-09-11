@@ -64,7 +64,7 @@ function ClusterNodeInner({ data }: NodeProps) {
           <span className="size-2 shrink-0 rounded-full"
             style={{ background: `rgb(${accent})`, boxShadow: `0 0 10px rgb(${accent})` }} />
           <h2 className="text-[14px] font-semibold tracking-tight" style={{ color: `rgb(${accent})` }}>
-            {cluster.reason}
+            {cluster.key}
           </h2>
         </div>
 

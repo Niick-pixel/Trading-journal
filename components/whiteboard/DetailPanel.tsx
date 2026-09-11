@@ -15,6 +15,7 @@ import { OUTCOME_COLOR } from './TradeNode';
 import { FlagList } from './FlagList';
 import { History } from './History';
 import { Lightbox } from './Lightbox';
+import { ShotGallery } from './ShotGallery';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -347,6 +348,16 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                     </Group>
                   </div>
                 )}
+
+                {/* The other charts: HTF context, entry, result. Added here
+                    rather than at capture time, because they are usually
+                    available at different moments from the entry. */}
+                <div className="mt-6">
+                  <div className="mb-2.5 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+                    Charts
+                  </div>
+                  <ShotGallery tradeId={trade.id} />
+                </div>
 
                 <FlagList trade={trade} onChanged={onChanged} />
                 <History tradeId={trade.id} />
