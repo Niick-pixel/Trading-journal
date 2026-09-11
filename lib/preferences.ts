@@ -23,6 +23,19 @@ export interface Preferences {
   dimPassed: boolean;
   /** Skip entrance and layout animation. */
   reduceMotion: boolean;
+  /**
+   * Filter combinations worth returning to — "all rule breaks", "all A+
+   * losers". Stored per machine with the rest of the furniture, because they
+   * describe how I want to look at the journal rather than what happened in it.
+   */
+  savedViews: SavedView[];
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  /** The Filters object, stored opaquely so adding a filter needs no migration. */
+  filters: Record<string, unknown>;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -33,6 +46,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showGrid: true,
   dimPassed: true,
   reduceMotion: false,
+  savedViews: [],
 };
 
 export const PREFERENCES_KEY = 'signature:preferences';

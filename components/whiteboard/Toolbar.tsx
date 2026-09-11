@@ -97,7 +97,7 @@ function Chip({
 
 export function Toolbar({
   filters, onChange, shown, total, selectMode, onToggleSelectMode, groupMode, onGroupMode,
-  onAddNote, onLinkSelected,
+  onAddNote, onLinkSelected, onSearch, savedViews,
 }: {
   filters: Filters;
   onChange: (next: Filters) => void;
@@ -110,6 +110,9 @@ export function Toolbar({
   onAddNote: () => void;
   /** Only offered when exactly two trades are selected. */
   onLinkSelected?: () => void;
+  onSearch: () => void;
+  /** Rendered as-is so the toolbar does not need to know about preferences. */
+  savedViews: React.ReactNode;
 }) {
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -221,6 +224,25 @@ export function Toolbar({
         style={{ color: selectMode ? 'rgb(var(--accent))' : 'var(--text-dim)' }}
       >
         {selectMode ? 'Selecting' : 'Select'}
+      </motion.button>
+
+      {savedViews}
+
+      <motion.button
+        type="button"
+        onClick={onSearch}
+        whileTap={press}
+        transition={spring}
+        title="Search everything you wrote (/)"
+        className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px]"
+        style={{ borderColor: 'var(--glass-stroke)', color: 'var(--text-dim)' }}
+      >
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+          <circle cx="5" cy="5" r="3.6" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M7.8 7.8L11 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+        Search
+        <kbd className="rounded px-1 text-[9px]" style={{ background: 'var(--glass-fill-strong)' }}>/</kbd>
       </motion.button>
 
       <Chip label="+ Note" active={false} onClick={onAddNote} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ACCOUNTS, CHECKLIST_KEYS, CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
@@ -26,6 +26,7 @@ import { TogglePill } from '@/components/ui/TogglePill';
 import { TriState } from '@/components/ui/TriState';
 import { TagPicker } from '@/components/ui/TagPicker';
 import { Checklist } from './Checklist';
+import { clearDraft, readDraft, writeDraft } from '@/lib/draft';
 import { ExplanationField } from './ExplanationField';
 import { ScreenshotDropzone } from './ScreenshotDropzone';
 
@@ -117,13 +118,104 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /*
+    Everything the draft round-trips. The screenshot is deliberately absent:
+    an image cannot go in localStorage without bloating it, and re-pasting a
+    chart is a second, not a paragraph.
+  */
+  const draftValues = useMemo(() => ({
+    date, instrument, direction, session, reason, setupType, htfBias,
+    premiumDiscount, targetType, outcome, explanation, lesson,
+    context, checks, followedRules, mistakeTags, account, accountLabel, status,
+    contracts, riskDollars, riskPercent, pnlDollars, stopPoints, rMultiple,
+    entryPrice, takeProfit, stopLoss, entryTime, exitTime, maeR, mfeR,
+    reached1R, confidence, wouldBeR, macroOverride,
+  }), [
+    date, instrument, direction, session, reason, setupType, htfBias,
+    premiumDiscount, targetType, outcome, explanation, lesson,
+    context, checks, followedRules, mistakeTags, account, accountLabel, status,
+    contracts, riskDollars, riskPercent, pnlDollars, stopPoints, rMultiple,
+    entryPrice, takeProfit, stopLoss, entryTime, exitTime, maeR, mfeR,
+    reached1R, confidence, wouldBeR, macroOverride,
+  ]);
+
+  const [restored, setRestored] = useState(false);
+
+  // The key handler is bound once; the ref keeps it pointed at the current
+  // submit rather than a stale closure over the first render's state.
+  const submitRef = useRef<(() => void) | null>(null);
+
+  // Only for a new trade: an edit already has the saved values, and restoring
+  // a stale draft over them would quietly rewrite a real record.
+  useEffect(() => {
+    if (editing) return;
+    const draft = readDraft();
+    if (!draft) return;
+    const v = draft.values as Record<string, never>;
+    const has = (k: string) => v[k] !== undefined && v[k] !== null;
+    if (has('reason')) setReason(v.reason);
+    if (has('explanation')) setExplanation(v.explanation);
+    if (has('lesson')) setLesson(v.lesson);
+    if (has('context')) setContext(v.context);
+    if (has('checks')) setChecks(v.checks);
+    if (has('date')) setDate(v.date);
+    if (has('instrument')) setInstrument(v.instrument);
+    if (has('direction')) setDirection(v.direction);
+    if (has('session')) setSession(v.session);
+    if (has('setupType')) setSetupType(v.setupType);
+    if (has('htfBias')) setHtfBias(v.htfBias);
+    if (has('premiumDiscount')) setPremiumDiscount(v.premiumDiscount);
+    if (has('targetType')) setTargetType(v.targetType);
+    if (has('outcome')) setOutcome(v.outcome);
+    if (has('followedRules')) setFollowedRules(v.followedRules);
+    if (has('mistakeTags')) setMistakeTags(v.mistakeTags);
+    if (has('account')) setAccount(v.account);
+    if (has('accountLabel')) setAccountLabel(v.accountLabel);
+    if (has('status')) setStatus(v.status);
+    if (has('contracts')) setContracts(v.contracts);
+    if (has('riskDollars')) setRiskDollars(v.riskDollars);
+    if (has('riskPercent')) setRiskPercent(v.riskPercent);
+    if (has('pnlDollars')) setPnlDollars(v.pnlDollars);
+    if (has('stopPoints')) setStopPoints(v.stopPoints);
+    if (has('rMultiple')) setRMultiple(v.rMultiple);
+    if (has('entryPrice')) setEntryPrice(v.entryPrice);
+    if (has('takeProfit')) setTakeProfit(v.takeProfit);
+    if (has('stopLoss')) setStopLoss(v.stopLoss);
+    if (has('entryTime')) setEntryTime(v.entryTime);
+    if (has('exitTime')) setExitTime(v.exitTime);
+    if (has('maeR')) setMaeR(v.maeR);
+    if (has('mfeR')) setMfeR(v.mfeR);
+    if (has('reached1R')) setReached1R(v.reached1R);
+    if (has('confidence')) setConfidence(v.confidence);
+    if (has('wouldBeR')) setWouldBeR(v.wouldBeR);
+    if (has('macroOverride')) setMacroOverride(v.macroOverride);
+    // Only claim to have restored something if something was actually written.
+    const raw = draft.values as Record<string, unknown>;
+    const real = ['explanation', 'lesson', 'reason']
+      .some((k) => typeof raw[k] === 'string' && (raw[k] as string).trim().length > 0);
+    const tags = raw.mistakeTags;
+    setRestored(real || (Array.isArray(tags) && tags.length > 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced, so typing an explanation is not one write per keystroke.
+  useEffect(() => {
+    if (editing) return;
+    const id = window.setTimeout(() => writeDraft(draftValues), 800);
+    return () => window.clearTimeout(id);
+  }, [draftValues, editing]);
+
   // Escape leaves the form the same way it closes the detail panel. Nothing is
-  // saved on the way out — a half-written trade is not a trade.
+  // saved on the way out — but the draft survives, so nothing is lost either.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
       if (e.key === 'Escape' && !typing) window.location.href = '/';
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        submitRef.current?.();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -199,12 +291,19 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         } catch { /* not JSON; show the raw beginning of the response */ }
         throw new Error(`${detail} (HTTP ${res.status})`);
       }
+      // Saved, so the draft has served its purpose. Leaving it behind would
+      // resurrect this trade as a ghost on the next New trade.
+      clearDraft();
       window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the trade.');
       setSubmitting(false);
     }
   }
+
+  // Refs are not written during render; this keeps the key handler pointed at
+  // the current submit without re-binding the listener on every keystroke.
+  useEffect(() => { submitRef.current = () => { void submit(); }; });
 
   return (
     <motion.div {...riseIn} transition={spring} className="glass rounded-[28px] p-7 sm:p-9">
@@ -241,6 +340,30 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           </svg>
         </motion.button>
       </div>
+
+      {restored && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={spring}
+          className="mb-6 flex flex-wrap items-center gap-3 rounded-[14px] px-4 py-2.5 text-[12px]"
+          style={{
+            background: 'rgb(var(--accent) / 0.10)',
+            border: '1px solid rgb(var(--accent) / 0.3)',
+            color: 'rgb(var(--accent))',
+          }}
+        >
+          <span>
+            Picked up where you left off. These are your unsaved answers, not defaults — the chart
+            needs pasting again.
+          </span>
+          <button
+            type="button"
+            onClick={() => { clearDraft(); window.location.reload(); }}
+            className="ml-auto underline underline-offset-2"
+          >
+            Start fresh
+          </button>
+        </motion.div>
+      )}
 
       <div className="space-y-8">
         {/* 1 — how it ended. You already know this before you start typing, and

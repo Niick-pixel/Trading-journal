@@ -23,6 +23,9 @@ import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } fro
 import { BulkBar } from './BulkBar';
 import { RiskBanner } from './RiskBanner';
 import { StickyNotes } from './StickyNotes';
+import { SearchPalette } from './SearchPalette';
+import { StreakBadge } from './StreakBadge';
+import { SavedViews } from './SavedViews';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
 const nodeTypes = { trade: TradeNode, cluster: ClusterNode, title: BoardTitle };
@@ -38,6 +41,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   // The same clustering answers different questions: by mistake tag it shows
   // which error repeats, by month whether any of this is improving.
   const [groupMode, setGroupMode] = useState<GroupMode>('reason');
+  const [searching, setSearching] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -47,6 +51,32 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     if (res.ok) setBoard(await res.json());
   }, []);
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  /*
+    Board shortcuts. Typing is always sacred — a key that means "new trade"
+    must never fire while I am halfway through writing an explanation, so every
+    one of these bails out when focus is in a field.
+  */
+  useEffect(() => {
+    if (readOnly) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      const typing = el instanceof HTMLInputElement
+        || el instanceof HTMLTextAreaElement
+        || el instanceof HTMLSelectElement
+        || (el as HTMLElement | null)?.isContentEditable === true;
+
+      if (e.key === '/' && !typing) { e.preventDefault(); setSearching(true); return; }
+      if ((e.key === 'n' || e.key === 'N') && !typing && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        window.location.href = '/new';
+        return;
+      }
+      if (e.key === 'Escape' && !searching) { setOpenId(null); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [readOnly, searching]);
 
   /** A note lands where the viewport is, not at the origin of a huge board. */
   const addNote = useCallback(async () => {
@@ -342,7 +372,8 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           including their headers — which are the point of the screen. */}
       {!readOnly && (
         <div className="shrink-0 px-4 pb-2">
-          <div className="mb-2 flex justify-center">
+          <div className="mb-2 flex items-center justify-center gap-2.5">
+            <StreakBadge trades={trades} />
             <RiskBanner trades={trades} />
           </div>
           <Toolbar
@@ -356,6 +387,13 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
             onGroupMode={setGroupMode}
             onAddNote={addNote}
             onLinkSelected={selectedIds.size === 2 ? linkSelected : undefined}
+            onSearch={() => setSearching(true)}
+            savedViews={
+              <SavedViews
+                current={filters as unknown as Record<string, unknown>}
+                onApply={(f) => setFilters({ ...EMPTY_FILTERS, ...(f as Partial<Filters>) })}
+              />
+            }
           />
         </div>
       )}
@@ -430,6 +468,13 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           <BoardControls onRecluster={recluster} />
         </div>
       )}
+
+      <SearchPalette
+        trades={trades}
+        open={searching}
+        onClose={() => setSearching(false)}
+        onOpenTrade={(id) => setOpenId(id)}
+      />
 
       {!readOnly && <DetailPanel trade={open} onClose={() => setOpenId(null)} onChanged={refresh} />}
       </div>
