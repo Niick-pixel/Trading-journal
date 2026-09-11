@@ -1,28 +1,40 @@
-import { GRADE_MAX, RUBRIC_KEYS, type RubricKey } from './domain';
+import {
+  CHECKLIST_ITEMS, GRADE_MAX, TAKE_IT_THRESHOLD, TRIGGER_KEYS, type ChecklistKey,
+} from './domain';
 
-export const GRADE_LETTERS = ['A+', 'A', 'B+', 'B', 'C', 'F'] as const;
+/** What gradeLetter() can return. The checklist's bands produce exactly these. */
+export const GRADE_LETTERS = ['A+', 'A', 'B', 'C', 'F'] as const;
 export type GradeLetter = (typeof GRADE_LETTERS)[number];
 
-/** 9-10 = A+, 8 = A, 7 = B+, 6 = B, 5 = C, <=4 = F. */
-export function gradeLetter(total: number): GradeLetter {
-  if (total >= 9) return 'A+';
-  if (total === 8) return 'A';
-  if (total === 7) return 'B+';
-  if (total === 6) return 'B';
-  if (total === 5) return 'C';
+/**
+ * Letter from the 100-point checklist score.
+ *
+ * 70 is the line the plan draws: at or above it, with the trigger fired, the
+ * trade is a commitment rather than a decision.
+ */
+export function gradeLetter(score: number): GradeLetter {
+  if (score >= 90) return 'A+';
+  if (score >= 80) return 'A';
+  if (score >= 70) return 'B';
+  if (score >= 50) return 'C';
   return 'F';
 }
 
-export function gradeTotal(scores: Record<RubricKey, number>): number {
-  return RUBRIC_KEYS.reduce((sum, k) => sum + (scores[k] ?? 0), 0);
+export function checklistScore(answers: Partial<Record<ChecklistKey, boolean>>): number {
+  return CHECKLIST_ITEMS.reduce((sum, item) => sum + (answers[item.key] ? item.points : 0), 0);
 }
 
-/** The threshold that turns the live badge amber during capture. */
-export const BELOW_STANDARD_AT = 5;
-export const BELOW_STANDARD_PROMPT = 'Below your standard. Why did you take it?';
+/** Both Phase 3 answers. Without them the entry does not exist. */
+export function triggerFired(answers: Partial<Record<ChecklistKey, boolean>>): boolean {
+  return TRIGGER_KEYS.every((key) => Boolean(answers[key]));
+}
 
-export function isBelowStandard(total: number): boolean {
-  return total <= BELOW_STANDARD_AT;
+export const BELOW_STANDARD_AT = TAKE_IT_THRESHOLD;
+export const BELOW_STANDARD_PROMPT = 'Below 70. This is not a trade — why are you taking it?';
+export const NO_TRIGGER_PROMPT = 'Phase 3 has not fired. This is a setup still forming, not an entry.';
+
+export function isBelowStandard(score: number): boolean {
+  return score < TAKE_IT_THRESHOLD;
 }
 
 /**
@@ -32,20 +44,22 @@ export function isBelowStandard(total: number): boolean {
 export const GRADE_COLOR: Record<GradeLetter, string> = {
   'A+': 'var(--grade-aplus)',
   A: 'var(--grade-a)',
-  'B+': 'var(--grade-bplus)',
   B: 'var(--grade-b)',
   C: 'var(--grade-c)',
   F: 'var(--grade-f)',
 };
 
-/** Buckets for "does my grading actually predict outcomes?" on the stats page. */
+/**
+ * Buckets for the plan's own question: is my grading actually predictive? If A+
+ * trades do not outperform B trades, the checklist needs changing — not your
+ * confidence.
+ */
 export const GRADE_BUCKETS = [
-  { label: 'A+', test: (t: number) => t >= 9 },
-  { label: 'A', test: (t: number) => t === 8 },
-  { label: 'B+', test: (t: number) => t === 7 },
-  { label: 'B', test: (t: number) => t === 6 },
-  { label: 'C', test: (t: number) => t === 5 },
-  { label: 'F', test: (t: number) => t <= 4 },
+  { label: 'A+', test: (s: number) => s >= 90 },
+  { label: 'A', test: (s: number) => s >= 80 && s < 90 },
+  { label: 'B', test: (s: number) => s >= 70 && s < 80 },
+  { label: 'C', test: (s: number) => s >= 50 && s < 70 },
+  { label: 'F', test: (s: number) => s < 50 },
 ] as const;
 
 export { GRADE_MAX };

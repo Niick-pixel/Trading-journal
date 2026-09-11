@@ -1,6 +1,7 @@
 import {
-  CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
-  RUBRIC, SESSIONS, SETUP_TYPES, TARGET_TYPES, type ContextFlag,
+  CHECKLIST_KEYS, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAGS, OUTCOMES,
+  PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES, SKIP_REASONS, TARGET_TYPES,
+  type ChecklistKey, type ContextFlag,
 } from './domain';
 import { MIN_EXPLANATION, type TradeInput } from './types';
 
@@ -23,10 +24,6 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
     if (v === null || v === undefined || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
-  };
-  const score = (field: keyof typeof RUBRIC): number | null => {
-    const n = Number(t[field]);
-    return Number.isInteger(n) && n >= 0 && n <= RUBRIC[field].max ? n : null;
   };
 
   const reason = oneOf('reason', REASONS);
@@ -54,13 +51,6 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
   }).filter(([, v]) => v === null).map(([k]) => k);
   if (missing.length) return { ok: false, error: `Invalid or missing: ${missing.join(', ')}.` };
 
-  const candle_strength = score('candle_strength');
-  const inversion_speed = score('inversion_speed');
-  const risk_reward = score('risk_reward');
-  if (candle_strength === null || inversion_speed === null || risk_reward === null) {
-    return { ok: false, error: 'Grade scores are out of range.' };
-  }
-
   const date = typeof t.date === 'string' && !Number.isNaN(new Date(t.date).getTime())
     ? t.date : null;
   if (!date) return { ok: false, error: 'Invalid date.' };
@@ -76,7 +66,18 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       // which is what an older client or an older row means by omitting it.
       ...(Object.fromEntries(CONTEXT_FLAGS.map((f) => [f, bool(f)])) as Record<ContextFlag, boolean>),
       premium_discount: premium_discount!, target_type: target_type!,
-      candle_strength, inversion_speed, risk_reward,
+      // Every checklist answer, read the same way; absent means false, which is
+      // what an older client or an unanswered box means.
+      ...(Object.fromEntries(CHECKLIST_KEYS.map((k) => [k, bool(k)])) as Record<ChecklistKey, boolean>),
+      followed_rules: t.followed_rules !== false,
+      regrade: oneOf('regrade', REGRADES),
+      mistake_tag: oneOf('mistake_tag', MISTAKE_TAGS),
+      entry_price: numOrNull('entry_price'),
+      take_profit: numOrNull('take_profit'),
+      stop_loss: numOrNull('stop_loss'),
+      would_have_hit_tp: t.would_have_hit_tp == null ? null : t.would_have_hit_tp === true,
+      r_left_on_table: numOrNull('r_left_on_table'),
+      skip_reason: oneOf('skip_reason', SKIP_REASONS),
       contracts: numOrNull('contracts'),
       risk_dollars: numOrNull('risk_dollars'),
       stop_points: numOrNull('stop_points'),

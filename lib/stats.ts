@@ -1,4 +1,7 @@
-import { REASONS, TARGET_TYPES, isTaken, type Reason, type TargetType } from './domain';
+import {
+  CHECKLIST_ITEMS, REASONS, SKIP_REASONS, TARGET_TYPES, isTaken,
+  type ChecklistKey, type Reason, type SkipReason, type TargetType,
+} from './domain';
 import { GRADE_BUCKETS } from './grade';
 import { isMacroTime } from './macro';
 import type { Trade } from './types';
@@ -149,7 +152,7 @@ export function aggregate(trades: Trade[]): Aggregate {
     winRate: decided ? wins / decided : null,
     totalR,
     avgR: taken.length ? totalR / taken.length : null,
-    avgGrade: trades.length ? trades.reduce((s, t) => s + t.grade_total, 0) / trades.length : null,
+    avgGrade: trades.length ? trades.reduce((s, t) => s + t.checklist_score, 0) / trades.length : null,
   };
 }
 
@@ -187,7 +190,7 @@ export function rByTargetType(trades: Trade[]): Group<TargetType>[] {
 /** Does the grading actually predict outcomes? */
 export function byGradeBucket(trades: Trade[]): Group<string>[] {
   return GRADE_BUCKETS.map((bucket) => {
-    const ts = trades.filter((t) => bucket.test(t.grade_total));
+    const ts = trades.filter((t) => bucket.test(t.checklist_score));
     return { key: bucket.label as string, trades: ts, stats: aggregate(ts) };
   }).filter((g) => g.trades.length > 0);
 }
@@ -248,3 +251,183 @@ export function leakPairs(trades: Trade[]): Array<[string, string]> {
 }
 
 export { isMacroTime };
+
+/* ------------------------------------------------------------------ *
+ * The plan's own questions.
+ *
+ * Everything above measures the market. These measure you: whether you
+ * followed the rules, whether you graded honestly, and what the setups you
+ * talked yourself out of would have paid.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Rule-following against rule-breaking, in R.
+ *
+ * The plan's premise is that the edge is in the rules rather than in the
+ * picks. If broken-rule trades net positive, that premise is being tested by
+ * the market and needs an answer — not ignored because the money was good.
+ */
+export interface Discipline {
+  followed: Aggregate;
+  broken: Aggregate;
+  /** R given up by the trades where a rule was broken. Negative is a cost. */
+  costOfBreaking: number;
+  /** Taken without both Phase 3 answers — entries the plan says don't exist. */
+  untriggered: Aggregate;
+}
+
+export function discipline(trades: Trade[]): Discipline {
+  const followed = trades.filter((t) => t.followed_rules);
+  const broken = trades.filter((t) => !t.followed_rules);
+  const untriggered = trades.filter((t) => isTaken(t.outcome) && !t.trigger_fired);
+
+  return {
+    followed: aggregate(followed),
+    broken: aggregate(broken),
+    costOfBreaking: aggregate(broken).totalR,
+    untriggered: aggregate(untriggered),
+  };
+}
+
+/**
+ * Letters on one scale, so the grade given at entry and the re-grade given
+ * after the close can be compared. The entry grade only ever produces A+, A,
+ * B, C or F; the re-grade is allowed the finer steps in between.
+ */
+const GRADE_RANK: Record<string, number> = {
+  'A+': 8, A: 7, 'A-': 6, 'B+': 5, B: 4, 'B-': 3, C: 2, F: 1,
+};
+
+/**
+ * Grade inflation: did you talk the setup up before the entry?
+ *
+ * A trade re-graded below the score the checklist gave it means the boxes were
+ * ticked to reach a number rather than because they were true. One is a bad
+ * day; a pattern of it means the checklist is being used as permission.
+ */
+export interface GradeHonesty {
+  /** Trades that have been re-graded at all. */
+  regraded: number;
+  /** Re-graded below the entry grade — the checklist was flattered. */
+  inflated: number;
+  /** Re-graded above it. */
+  understated: number;
+  matched: number;
+  /** Average letters of drop, over the re-graded trades. Positive is inflation. */
+  averageDrop: number | null;
+  /** The worst offenders, most-inflated first. */
+  worst: Array<{ trade: Trade; from: string; to: string; drop: number }>;
+}
+
+export function gradeHonesty(trades: Trade[]): GradeHonesty {
+  const regraded = trades.filter((t) => t.regrade != null);
+  const scored = regraded.map((t) => {
+    const from = t.grade_letter;
+    const to = t.regrade as string;
+    return { trade: t, from, to, drop: (GRADE_RANK[from] ?? 0) - (GRADE_RANK[to] ?? 0) };
+  });
+
+  return {
+    regraded: regraded.length,
+    inflated: scored.filter((s) => s.drop > 0).length,
+    understated: scored.filter((s) => s.drop < 0).length,
+    matched: scored.filter((s) => s.drop === 0).length,
+    averageDrop: scored.length ? scored.reduce((sum, s) => sum + s.drop, 0) / scored.length : null,
+    worst: scored.filter((s) => s.drop > 0).sort((a, b) => b.drop - a.drop).slice(0, 5),
+  };
+}
+
+/**
+ * What hesitation cost.
+ *
+ * A skipped setup that would have won is a real loss that never appears in the
+ * P&L, which is exactly why it goes unexamined. `rLeft` only counts the ones
+ * you went back and confirmed — a guess here would make the number worthless.
+ */
+export interface Hesitation {
+  /** Setups marked 'Not taken'. */
+  skipped: number;
+  /** Of those, the ones you actually went back and checked. */
+  checked: number;
+  wouldHaveWon: number;
+  wouldHaveLost: number;
+  /** Total R the confirmed winners would have paid. */
+  rLeft: number;
+  /** R the confirmed losers saved you by being skipped. */
+  rAvoided: number;
+  /** Skips grouped by the real reason, costliest first. */
+  byReason: Array<{ reason: SkipReason; count: number; rLeft: number }>;
+}
+
+export function hesitation(trades: Trade[]): Hesitation {
+  const skipped = trades.filter((t) => t.outcome === 'Not taken');
+  const checked = skipped.filter((t) => t.would_have_hit_tp != null);
+  const won = checked.filter((t) => t.would_have_hit_tp === true);
+  const lost = checked.filter((t) => t.would_have_hit_tp === false);
+
+  const byReason = SKIP_REASONS.map((reason) => {
+    const group = skipped.filter((t) => t.skip_reason === reason);
+    return {
+      reason,
+      count: group.length,
+      rLeft: group
+        .filter((t) => t.would_have_hit_tp === true)
+        .reduce((sum, t) => sum + (t.r_left_on_table ?? 0), 0),
+    };
+  })
+    .filter((g) => g.count > 0)
+    .sort((a, b) => b.rLeft - a.rLeft || b.count - a.count);
+
+  return {
+    skipped: skipped.length,
+    checked: checked.length,
+    wouldHaveWon: won.length,
+    wouldHaveLost: lost.length,
+    rLeft: won.reduce((sum, t) => sum + (t.r_left_on_table ?? 0), 0),
+    rAvoided: lost.reduce((sum, t) => sum + Math.abs(t.r_left_on_table ?? 0), 0),
+    byReason,
+  };
+}
+
+/**
+ * Is each checklist item earning its weight?
+ *
+ * For every item, the R per trade taken with it ticked against the R per trade
+ * taken without. A large positive lift on a 5-point item, or none at all on a
+ * 20-point one, is an argument that the weights are wrong — which is a thing
+ * the plan should be allowed to learn.
+ */
+export interface ItemEdge {
+  key: ChecklistKey;
+  label: string;
+  points: number;
+  withCount: number;
+  withoutCount: number;
+  withAvgR: number | null;
+  withoutAvgR: number | null;
+  /** withAvgR − withoutAvgR. Null until both sides have a trade. */
+  lift: number | null;
+}
+
+export function checklistEdge(trades: Trade[]): ItemEdge[] {
+  const taken = trades.filter((t) => isTaken(t.outcome) && t.r_multiple != null);
+  const avg = (ts: Trade[]) =>
+    ts.length ? ts.reduce((sum, t) => sum + (t.r_multiple as number), 0) / ts.length : null;
+
+  return CHECKLIST_ITEMS.map((item) => {
+    const on = taken.filter((t) => t[item.key]);
+    const off = taken.filter((t) => !t[item.key]);
+    const withAvgR = avg(on);
+    const withoutAvgR = avg(off);
+    return {
+      key: item.key,
+      label: item.label,
+      points: item.points,
+      withCount: on.length,
+      withoutCount: off.length,
+      withAvgR,
+      withoutAvgR,
+      lift: withAvgR != null && withoutAvgR != null ? withAvgR - withoutAvgR : null,
+    };
+  });
+}

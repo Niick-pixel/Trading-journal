@@ -3,24 +3,26 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS,
-  RUBRIC, SESSIONS, SETUP_TYPES, TARGET_TYPES,
-  type ContextFlag, type Direction, type HtfBias, type Instrument, type Outcome, type PremiumDiscount,
+  CHECKLIST_KEYS, CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
+  MISTAKE_TAGS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES,
+  SKIP_REASONS, TARGET_TYPES,
+  type ChecklistKey, type ContextFlag, type Direction, type HtfBias, type Instrument,
+  type MistakeTag, type Outcome, type PremiumDiscount, type Regrade, type SkipReason,
   type Reason, type Session, type SetupType, type TargetType,
 } from '@/lib/domain';
-import { GRADE_MAX } from '@/lib/grade';
+import { GRADE_MAX, checklistScore, triggerFired } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
-import { spring, riseIn } from '@/lib/motion';
+import { spring, springSoft, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
 import { MIN_EXPLANATION, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
-import { RubricSlider } from '@/components/ui/RubricSlider';
 import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
 import { TogglePill } from '@/components/ui/TogglePill';
+import { Checklist } from './Checklist';
 import { ExplanationField } from './ExplanationField';
 import { ScreenshotDropzone } from './ScreenshotDropzone';
 
@@ -46,9 +48,23 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const setFlag = (flag: ContextFlag, value: boolean) =>
     setContext((prev) => ({ ...prev, [flag]: value }));
 
-  const [candleStrength, setCandleStrength] = useState(trade?.candle_strength ?? 0);
-  const [inversionSpeed, setInversionSpeed] = useState(trade?.inversion_speed ?? 0);
-  const [riskReward, setRiskReward] = useState(trade?.risk_reward ?? 0);
+  const [checks, setChecks] = useState<Record<ChecklistKey, boolean>>(() =>
+    Object.fromEntries(
+      CHECKLIST_KEYS.map((k) => [k, trade ? Boolean(trade[k]) : false]),
+    ) as Record<ChecklistKey, boolean>,
+  );
+  const setCheck = (key: ChecklistKey, value: boolean) =>
+    setChecks((prev) => ({ ...prev, [key]: value }));
+
+  const [followedRules, setFollowedRules] = useState(trade?.followed_rules ?? true);
+  const [regrade, setRegrade] = useState<Regrade | null>(trade?.regrade ?? null);
+  const [mistakeTag, setMistakeTag] = useState<MistakeTag | null>(trade?.mistake_tag ?? null);
+  const [entryPrice, setEntryPrice] = useState(trade?.entry_price?.toString() ?? '');
+  const [takeProfit, setTakeProfit] = useState(trade?.take_profit?.toString() ?? '');
+  const [stopLoss, setStopLoss] = useState(trade?.stop_loss?.toString() ?? '');
+  const [wouldHaveHitTp, setWouldHaveHitTp] = useState<boolean | null>(trade?.would_have_hit_tp ?? null);
+  const [rLeftOnTable, setRLeftOnTable] = useState(trade?.r_left_on_table?.toString() ?? '');
+  const [skipReason, setSkipReason] = useState<SkipReason | null>(trade?.skip_reason ?? null);
 
   const [date, setDate] = useState(() => (trade ? toLocalInput(new Date(trade.date)) : toLocalInput(new Date())));
   const [instrument, setInstrument] = useState<Instrument>(trade?.instrument ?? 'NQ');
@@ -76,7 +92,8 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const total = candleStrength + inversionSpeed + riskReward;
+  const total = checklistScore(checks);
+  const fired = triggerFired(checks);
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
   const explanationOk = explanation.trim().length >= MIN_EXPLANATION;
   const canSubmit = (Boolean(file) || editing) && Boolean(reason) && explanationOk && !submitting;
@@ -97,7 +114,13 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       reason, setup_type: setupType, htf_bias: htfBias,
       ...context,
       premium_discount: premiumDiscount, target_type: targetType,
-      candle_strength: candleStrength, inversion_speed: inversionSpeed, risk_reward: riskReward,
+      ...checks,
+      followed_rules: followedRules,
+      regrade, mistake_tag: mistakeTag,
+      entry_price: num(entryPrice), take_profit: num(takeProfit), stop_loss: num(stopLoss),
+      would_have_hit_tp: wouldHaveHitTp,
+      r_left_on_table: num(rLeftOnTable),
+      skip_reason: skipReason,
       contracts: num(contracts), risk_dollars: num(riskDollars), stop_points: num(stopPoints),
       outcome, r_multiple: num(rMultiple),
       explanation: explanation.trim(), lesson: lesson.trim() || null,
@@ -195,25 +218,18 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           ))}
         </div>
 
-        {/* 5 — grading, with the live badge. */}
+        {/* 5 — the checklist, with the live score. */}
         <div>
           <span className="mb-4 block text-[11px] font-medium uppercase tracking-[0.07em]"
             style={{ color: 'var(--text-faint)' }}>
-            Grade
+            Checklist
           </span>
 
           <div className="mb-6">
-            <GradeBadge total={total} max={GRADE_MAX} size="lg" showPrompt />
+            <GradeBadge total={total} max={GRADE_MAX} size="lg" showPrompt triggerFired={fired} />
           </div>
 
-          <div className="space-y-5">
-            <RubricSlider label={RUBRIC.candle_strength.label} hint={RUBRIC.candle_strength.hint}
-              value={candleStrength} max={RUBRIC.candle_strength.max} onChange={setCandleStrength} accent={accent} />
-            <RubricSlider label={RUBRIC.inversion_speed.label} hint={RUBRIC.inversion_speed.hint}
-              value={inversionSpeed} max={RUBRIC.inversion_speed.max} onChange={setInversionSpeed} accent={accent} />
-            <RubricSlider label={RUBRIC.risk_reward.label} hint={RUBRIC.risk_reward.hint}
-              value={riskReward} max={RUBRIC.risk_reward.max} onChange={setRiskReward} accent={accent} />
-          </div>
+          <Checklist answers={checks} onChange={setCheck} accent={accent} />
         </div>
 
         {/* 6 — the rest. Not hidden behind a disclosure any more: every one of
@@ -274,6 +290,66 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                 <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
               </Field>
             </div>
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Entry"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+                value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} /></Field>
+              <Field label="Take profit"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+                value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)} /></Field>
+              <Field label="Stop loss"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+                value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} /></Field>
+            </div>
+
+            {/* After the close: the honest part. */}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
+                <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
+              </Field>
+              <Field label="Mistake tag">
+                <Select value={mistakeTag} onChange={setMistakeTag} options={MISTAKE_TAGS} placeholder="None" />
+              </Field>
+            </div>
+
+            <TogglePill
+              checked={followedRules}
+              onChange={setFollowedRules}
+              label="Followed ALL rules"
+              hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%."
+            />
+
+            {/* Only meaningful for a setup you passed on — the plan calls this
+                the most important thing in the whole file. */}
+            <AnimatePresence>
+              {outcome === 'Not taken' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={springSoft}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-5 pt-1">
+                    <Field label="Would it have hit TP?" hint="Go back and check. Guessing defeats the point.">
+                      <Segmented
+                        value={wouldHaveHitTp === null ? 'Unknown' : wouldHaveHitTp ? 'Yes' : 'No'}
+                        onChange={(v) => setWouldHaveHitTp(v === 'Unknown' ? null : v === 'Yes')}
+                        options={['Yes', 'No', 'Unknown'] as const}
+                        accentFor={(v) => (v === 'Yes' ? 'var(--outcome-win)' : v === 'No' ? 'var(--outcome-loss)' : 'var(--outcome-neutral)')}
+                      />
+                    </Field>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <Field label="R left on the table">
+                        <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                          value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />
+                      </Field>
+                      <Field label="Real reason" hint="Not the story — the reason.">
+                        <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
+                      </Field>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <Field label="Lesson" hint="Optional — what you would do differently.">
               <ExplanationField value={lesson} onChange={setLesson} required={false} minRows={3}

@@ -29,7 +29,7 @@ export type TradeNodeData = {
 function TradeNodeInner({ data }: NodeProps) {
   const { trade, selected, onOpen, scale = 1, dimPassed = true } = data as unknown as TradeNodeData;
   const outcome = OUTCOME_COLOR[trade.outcome];
-  const grade = GRADE_COLOR[gradeLetter(trade.grade_total)];
+  const grade = GRADE_COLOR[gradeLetter(trade.checklist_score)];
   const passed = trade.outcome === 'Not taken';
 
   return (
@@ -108,7 +108,7 @@ function TradeNodeInner({ data }: NodeProps) {
           boxShadow: `0 0 12px rgb(${grade} / 0.35)`,
         }}
       >
-        {gradeLetter(trade.grade_total)}
+        {gradeLetter(trade.checklist_score)}
       </div>
 
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">

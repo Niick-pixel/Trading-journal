@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CONTEXT_FLAG_LIST, OUTCOMES, RUBRIC, type Outcome } from '@/lib/domain';
+import { CHECKLIST_PHASES, CONTEXT_FLAG_LIST, OUTCOMES, type Outcome } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
 import { spring, springSoft } from '@/lib/motion';
 import type { Trade } from '@/lib/types';
@@ -150,8 +150,29 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                       {trade.macro_time && ' · macro'}
                     </p>
                   </div>
-                  <GradeBadge total={trade.grade_total} max={GRADE_MAX} size="md" />
+                  <GradeBadge
+                    total={trade.checklist_score}
+                    max={GRADE_MAX}
+                    size="md"
+                    triggerFired={trade.trigger_fired}
+                  />
                 </div>
+
+                {/* The plan's hardest rule, stated where it was broken. The
+                    0/20 on Phase 3 below says the same thing, but only if you
+                    already know what Phase 3 is for. */}
+                {trade.outcome !== 'Not taken' && !trade.trigger_fired && (
+                  <p
+                    className="mb-5 rounded-[14px] px-4 py-2.5 text-[12px] leading-snug"
+                    style={{
+                      color: 'rgb(var(--outcome-loss))',
+                      background: 'rgb(var(--outcome-loss) / 0.10)',
+                      border: '1px solid rgb(var(--outcome-loss) / 0.30)',
+                    }}
+                  >
+                    Phase 3 never fired on this one. By the plan, this entry does not exist.
+                  </p>
+                )}
 
                 <p className="mb-6 whitespace-pre-wrap text-[13px] leading-relaxed">{trade.explanation}</p>
 
@@ -178,21 +199,92 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   )}
                 </div>
 
+                {/*
+                  The whole checklist, ticked and unticked alike.
+                  Context flags above show only what was true because absence
+                  there means nothing — here the missing points ARE the
+                  diagnosis, so a blank row has to be visible.
+                */}
+                <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                  {CHECKLIST_PHASES.map((phase) => {
+                    const earned = phase.items.reduce((n, i) => n + (trade[i.key] ? i.points : 0), 0);
+                    const possible = phase.items.reduce((n, i) => n + i.points, 0);
+                    return (
+                      <Group key={phase.phase}>
+                        <div className="flex items-baseline justify-between gap-3 pb-1 pt-1.5">
+                          <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+                            {phase.phase}
+                          </span>
+                          <span className="tabular-nums text-[10px]" style={{ color: 'var(--text-dim)' }}>
+                            {earned}/{possible}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1.5 pb-2 pt-1">
+                          {phase.items.map((item) => (
+                            <Check key={item.key} on={trade[item.key]} label={item.label} />
+                          ))}
+                        </div>
+                      </Group>
+                    );
+                  })}
+                </div>
+
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Group>
                     <Row label="Setup" value={trade.setup_type} />
                     <Row label="HTF bias" value={trade.htf_bias} />
                     <Row label="Premium / discount" value={trade.premium_discount} />
                     <Row label="Target" value={trade.target_type} />
+                    <Row label="Entry / TP / SL"
+                      value={`${trade.entry_price ?? '—'} · ${trade.take_profit ?? '—'} · ${trade.stop_loss ?? '—'}`} />
                   </Group>
                   <Group>
-                    <Row label={RUBRIC.candle_strength.label} value={`${trade.candle_strength} / ${RUBRIC.candle_strength.max}`} />
-                    <Row label={RUBRIC.inversion_speed.label} value={`${trade.inversion_speed} / ${RUBRIC.inversion_speed.max}`} />
-                    <Row label={RUBRIC.risk_reward.label} value={`${trade.risk_reward} / ${RUBRIC.risk_reward.max}`} />
+                    <Row
+                      label="Followed every rule"
+                      value={
+                        <span style={{ color: trade.followed_rules ? undefined : 'rgb(var(--grade-f))' }}>
+                          {trade.followed_rules ? 'Yes' : 'No'}
+                        </span>
+                      }
+                    />
+                    {/* The grade you gave it before vs. after. Disagreement is
+                        the point — see the grade-honesty panel in Stats. */}
+                    <Row
+                      label="Re-grade, honestly"
+                      value={trade.regrade ? `${trade.grade_letter} → ${trade.regrade}` : '—'}
+                    />
+                    <Row label="Mistake" value={trade.mistake_tag ?? '—'} />
                     <Row label="Contracts / risk / stop"
                       value={`${trade.contracts ?? '—'} · $${trade.risk_dollars ?? '—'} · ${trade.stop_points ?? '—'}pt`} />
                   </Group>
                 </div>
+
+                {/* A setup you passed on still costs something. The plan calls
+                    this its most important sheet. */}
+                {trade.outcome === 'Not taken' && (
+                  <div className="mt-3">
+                    <Group>
+                      <Row label="Why it was skipped" value={trade.skip_reason ?? '—'} />
+                      <Row
+                        label="Would have hit TP"
+                        value={trade.would_have_hit_tp == null ? 'Unchecked' : trade.would_have_hit_tp ? 'Yes' : 'No'}
+                      />
+                      <Row
+                        label="R left on the table"
+                        value={
+                          trade.r_left_on_table == null ? '—' : (
+                            <span
+                              className="tabular-nums"
+                              style={{ color: trade.r_left_on_table > 0 ? 'rgb(var(--outcome-loss))' : undefined }}
+                            >
+                              {trade.r_left_on_table > 0 ? '+' : ''}{trade.r_left_on_table.toFixed(1)}R
+                            </span>
+                          )
+                        }
+                      />
+                    </Group>
+                  </div>
+                )}
 
                 <div className="mt-10 flex flex-wrap items-center gap-3">
                   <AnimatePresence mode="wait">

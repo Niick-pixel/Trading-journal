@@ -147,9 +147,44 @@ The database enforces the model rather than trusting the app:
   be written by any code path.
 - The 80-character minimum on `explanation` is a constraint, not just form
   validation.
-- `grade_total` and `grade_letter` are **generated columns** computed inside
-  SQLite from the three rubric scores. They cannot be written directly and can
-  never disagree with the scores that produced them.
+- `checklist_score`, `trigger_fired` and `grade_letter` are **generated
+  columns** computed inside SQLite from the nine checklist answers. They cannot
+  be written directly and can never disagree with the answers that produced
+  them.
+
+## The checklist
+
+Grading is the plan's own weighted 100-point checklist, in three phases:
+
+| Phase | Item | Points |
+|---|---|---|
+| 1 — Prep | Higher timeframe bias is clear | 10 |
+| | Inside a killzone | 10 |
+| | No NFP / FOMC / CPI conflict | 5 |
+| 2 — Setup | Clear sweep of a MAJOR level | 20 |
+| | Strong FVG after the sweep | 15 |
+| | Targets are clear | 15 |
+| | Clean path to target | 5 |
+| 3 — Trigger | Price returned to the FVG | 5 |
+| | Inversion candle CLOSED through the FVG | 15 |
+
+Two rules sit on top of the arithmetic, and both are enforced in the schema
+rather than in the form:
+
+- **Phase 3 must fire for an entry to exist.** `trigger_fired` is true only when
+  both Phase 3 boxes are ticked. A 90-point setup with no inversion close is a
+  setup still forming, and the app says so where you can't miss it.
+- **At 70 or more with the trigger fired, taking it is the rule.** Below 70 the
+  capture form asks you why you're taking it at all.
+
+Letters fall out of the score: 90+ is A+, 80+ A, 70+ B, 50+ C, below that F.
+Those thresholds are the one part of the grading I chose rather than read off
+the plan — say the word and they move.
+
+After the close there is a second, harsher pass: `followed_rules`, an honest
+`regrade`, and a `mistake_tag`. Stats compares the two, because a pattern of
+re-grading below the checklist means the boxes are being ticked to reach a
+number rather than because they were true.
 
 ## A note on "Not taken"
 
@@ -157,6 +192,12 @@ Trades you passed on are journalled and clustered like any other, but they never
 touch R or win rate — you didn't risk money, so it can't have made or lost any.
 They're reported separately as a `passed` count. Average grade *does* include
 them, because a passed A+ setup is still evidence about how you grade.
+
+A skipped setup can also record what skipping it cost: whether it would have hit
+TP, the R left on the table, and the real reason (Fear, Rule, Distracted, Missed
+it). The Stats page totals that separately — a setup you talked yourself out of
+is a real loss that never reaches the P&L, which is exactly why it goes
+unexamined.
 
 ## Stack
 

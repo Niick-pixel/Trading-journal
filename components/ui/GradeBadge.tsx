@@ -1,7 +1,10 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { GRADE_COLOR, gradeLetter, isBelowStandard, BELOW_STANDARD_PROMPT } from '@/lib/grade';
+import {
+  GRADE_COLOR, gradeLetter, isBelowStandard,
+  BELOW_STANDARD_PROMPT, NO_TRIGGER_PROMPT,
+} from '@/lib/grade';
 import { spring, springBouncy } from '@/lib/motion';
 
 const AMBER = 'var(--amber)';
@@ -11,16 +14,26 @@ interface GradeBadgeProps {
   max: number;
   /** 'lg' is the live badge in the capture form; 'sm' rides in a node corner. */
   size?: 'sm' | 'md' | 'lg';
-  /** Show the "below your standard" nudge when the total is <= 5. */
+  /** Show the nudge when the score is under 70 or Phase 3 hasn't fired. */
   showPrompt?: boolean;
+  /**
+   * Both Phase 3 answers. The plan is explicit that without them there is no
+   * entry at all, so this outranks the score: a 85-point setup with no
+   * inversion close is still not a trade.
+   */
+  triggerFired?: boolean;
 }
 
 /** Letter big, number small. Glows in its grade colour. */
-export function GradeBadge({ total, max, size = 'md', showPrompt = false }: GradeBadgeProps) {
+export function GradeBadge({
+  total, max, size = 'md', showPrompt = false, triggerFired = true,
+}: GradeBadgeProps) {
   const letter = gradeLetter(total);
   const below = isBelowStandard(total);
-  // Below standard, the badge goes amber regardless of the letter's own colour.
-  const color = below && showPrompt ? AMBER : GRADE_COLOR[letter];
+  // No trigger is the louder problem, so it wins the one line we show.
+  const prompt = !triggerFired ? NO_TRIGGER_PROMPT : below ? BELOW_STANDARD_PROMPT : null;
+  // Off-plan, the badge goes amber regardless of the letter's own colour.
+  const color = prompt && showPrompt ? AMBER : GRADE_COLOR[letter];
 
   const dims = {
     sm: { box: 'size-9 rounded-[11px]', letter: 'text-[13px]', num: 'text-[8px]' },
@@ -51,8 +64,9 @@ export function GradeBadge({ total, max, size = 'md', showPrompt = false }: Grad
       </motion.div>
 
       <AnimatePresence>
-        {showPrompt && below && (
+        {showPrompt && prompt && (
           <motion.p
+            key={prompt}
             initial={{ opacity: 0, x: -8, scale: 0.96 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -6, scale: 0.98 }}
@@ -60,7 +74,7 @@ export function GradeBadge({ total, max, size = 'md', showPrompt = false }: Grad
             className="max-w-[19rem] text-[13px] font-medium leading-snug"
             style={{ color: `rgb(${AMBER})` }}
           >
-            {BELOW_STANDARD_PROMPT}
+            {prompt}
           </motion.p>
         )}
       </AnimatePresence>

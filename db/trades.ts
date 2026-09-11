@@ -6,17 +6,44 @@ import { deleteScreenshot } from './screenshots';
 import type { SettleInput, Trade, TradeFilters, TradeInput } from '../lib/types';
 
 type BoolColumn = (typeof BOOL_COLUMNS)[number];
-type Row = Omit<Trade, BoolColumn> & Record<BoolColumn, number>;
+type ReadBoolColumn = (typeof GENERATED_BOOL_COLUMNS)[number];
+type NullBoolColumn = (typeof NULLABLE_BOOL_COLUMNS)[number];
 
+type Row =
+  & Omit<Trade, BoolColumn | ReadBoolColumn | NullBoolColumn>
+  & Record<BoolColumn | ReadBoolColumn, number>
+  & Record<NullBoolColumn, number | null>;
+
+/** Booleans that are always present and always written. */
 const BOOL_COLUMNS = [
   'macro_time', 'macro_time_auto', 'sweep_before_entry', 'singular_gap', 'target_unswept', 'smt',
   'displacement', 'mss_confirmed', 'volume_imbalance', 'consequent_encroachment',
   'equal_highs_lows', 'retest_entry', 'news_window',
+  'chk_htf_bias', 'chk_killzone', 'chk_no_news',
+  'chk_sweep', 'chk_displacement_fvg', 'chk_targets_clear', 'chk_clean_path',
+  'chk_returned_to_fvg', 'chk_inversion_close',
+  'followed_rules',
 ] as const;
+
+/** Derived by SQLite from the checklist. Read, never written. */
+const GENERATED_BOOL_COLUMNS = ['trigger_fired'] as const;
+
+/**
+ * Booleans that are allowed to be unknown.
+ *
+ * "Would it have hit TP?" only has an answer for a setup you skipped, and
+ * collapsing that null to 0 would quietly turn "I never checked" into "no" —
+ * which is exactly the number the hesitation-cost panel reads.
+ */
+const NULLABLE_BOOL_COLUMNS = ['would_have_hit_tp'] as const;
 
 function hydrate(row: Row): Trade {
   const trade = { ...row } as unknown as Trade;
   for (const col of BOOL_COLUMNS) trade[col] = Boolean(row[col]);
+  for (const col of GENERATED_BOOL_COLUMNS) trade[col] = Boolean(row[col]);
+  for (const col of NULLABLE_BOOL_COLUMNS) {
+    trade[col] = row[col] == null ? null : Boolean(row[col]);
+  }
   return trade;
 }
 
@@ -31,6 +58,9 @@ function flatten(input: TradeInput): Record<string, SQLInputValue> {
     out[key] = value === undefined ? null : (value as SQLInputValue);
   }
   for (const col of BOOL_COLUMNS) out[col] = input[col] ? 1 : 0;
+  for (const col of NULLABLE_BOOL_COLUMNS) {
+    out[col] = input[col] == null ? null : input[col] ? 1 : 0;
+  }
   return out;
 }
 
@@ -40,7 +70,12 @@ const WRITABLE = [
   'premium_discount', 'target_type', 'smt',
   'displacement', 'mss_confirmed', 'volume_imbalance', 'consequent_encroachment',
   'equal_highs_lows', 'retest_entry', 'news_window',
-  'candle_strength', 'inversion_speed', 'risk_reward',
+  'chk_htf_bias', 'chk_killzone', 'chk_no_news',
+  'chk_sweep', 'chk_displacement_fvg', 'chk_targets_clear', 'chk_clean_path',
+  'chk_returned_to_fvg', 'chk_inversion_close',
+  'followed_rules', 'regrade', 'mistake_tag',
+  'entry_price', 'take_profit', 'stop_loss',
+  'would_have_hit_tp', 'r_left_on_table', 'skip_reason',
   'contracts', 'risk_dollars', 'stop_points', 'outcome', 'r_multiple', 'explanation', 'lesson',
   'screenshot_path',
 ] as const;
@@ -66,8 +101,8 @@ export function listTrades(filters: TradeFilters = {}): Trade[] {
 
   if (filters.from) { where.push('date >= @from'); params.from = filters.from; }
   if (filters.to) { where.push('date <= @to'); params.to = filters.to; }
-  if (filters.minGrade != null) { where.push('grade_total >= @minGrade'); params.minGrade = filters.minGrade; }
-  if (filters.maxGrade != null) { where.push('grade_total <= @maxGrade'); params.maxGrade = filters.maxGrade; }
+  if (filters.minGrade != null) { where.push('checklist_score >= @minGrade'); params.minGrade = filters.minGrade; }
+  if (filters.maxGrade != null) { where.push('checklist_score <= @maxGrade'); params.maxGrade = filters.maxGrade; }
 
   // IN-lists get positional placeholders; better-sqlite3 won't bind an array.
   const inList = (column: string, values: string[] | undefined, prefix: string) => {

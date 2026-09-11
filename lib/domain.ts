@@ -125,17 +125,84 @@ export const CONTEXT_FLAG_LIST: ContextFlagSpec[] =
 
 export const CONTEXT_FLAGS: ContextFlag[] = CONTEXT_FLAG_LIST.map((f) => f.key);
 
-/** Rubric ceilings, so the sliders and the CHECK constraints can't drift apart. */
-export const RUBRIC = {
-  candle_strength: { max: 4, label: 'Candle strength', hint: 'How decisively did the inverting candle close through the gap?' },
-  inversion_speed: { max: 3, label: 'Inversion speed', hint: 'How fast did price invert and leave? Slow grinds score low.' },
-  risk_reward: { max: 3, label: 'Risk / reward', hint: 'Distance to the target measured against the stop.' },
-} as const;
+/**
+ * The checklist, exactly as the plan states it.
+ *
+ * Three phases, weighted to 100. Phase 3 must fire for an entry to exist — a
+ * high score with no inversion close is a setup still forming, not a trade —
+ * and once it does fire at 70 or more, taking it is the rule rather than a
+ * decision. The weights live here and in the schema's generated columns; the
+ * score is computed by SQLite so it can never disagree with the answers.
+ */
+export const CHECKLIST_PHASES = [
+  {
+    phase: 'Phase 1 — Prep',
+    note: 'Before anything else is worth looking at.',
+    items: [
+      { key: 'chk_htf_bias', points: 10, label: 'Higher timeframe bias is clear', hint: '1H and 4H agree on direction.' },
+      { key: 'chk_killzone', points: 10, label: 'Inside a killzone', hint: 'London 00:00–03:00 or NY AM 07:30–10:00 (CR).' },
+      { key: 'chk_no_news', points: 5, label: 'No NFP / FOMC / CPI conflict', hint: 'Nothing high-impact due while this trade is live.' },
+    ],
+  },
+  {
+    phase: 'Phase 2 — Setup',
+    note: 'What the chart actually did.',
+    items: [
+      { key: 'chk_sweep', points: 20, label: 'Clear sweep of a MAJOR level', hint: 'Session high/low, PDH/PDL, EQH/EQL — not a random wiggle.' },
+      { key: 'chk_displacement_fvg', points: 15, label: 'Strong FVG after the sweep', hint: 'Displacement, not drift.' },
+      { key: 'chk_targets_clear', points: 15, label: 'Targets are clear', hint: 'EQH/EQL, ITH/ITL, OB or CISD — nameable, not hopeful.' },
+      { key: 'chk_clean_path', points: 5, label: 'Clean path to target', hint: 'No opposing EQH/EQL sitting in the way.' },
+    ],
+  },
+  {
+    phase: 'Phase 3 — Trigger',
+    note: 'Both of these, or there is no entry. A high score without them is a setup still forming.',
+    items: [
+      { key: 'chk_returned_to_fvg', points: 5, label: 'Price returned to the FVG', hint: '' },
+      { key: 'chk_inversion_close', points: 15, label: 'Inversion candle CLOSED through the FVG', hint: 'With momentum. A wick through is not a close through.' },
+    ],
+  },
+] as const;
 
-export type RubricKey = keyof typeof RUBRIC;
-export const RUBRIC_KEYS = Object.keys(RUBRIC) as RubricKey[];
-/** 4 + 3 + 3 */
-export const GRADE_MAX = RUBRIC_KEYS.reduce((sum, k) => sum + RUBRIC[k].max, 0);
+export type ChecklistKey = (typeof CHECKLIST_PHASES)[number]['items'][number]['key'];
+
+export interface ChecklistItem {
+  key: ChecklistKey;
+  points: number;
+  label: string;
+  hint: string;
+  phase: string;
+}
+
+export const CHECKLIST_ITEMS: ChecklistItem[] = CHECKLIST_PHASES.flatMap((p) =>
+  p.items.map((item) => ({ ...item, phase: p.phase })),
+);
+
+export const CHECKLIST_KEYS: ChecklistKey[] = CHECKLIST_ITEMS.map((i) => i.key);
+
+/** The two Phase 3 answers. Without both, there is no trade. */
+export const TRIGGER_KEYS: ChecklistKey[] = ['chk_returned_to_fvg', 'chk_inversion_close'];
+
+/** 10+10+5 + 20+15+15+5 + 5+15 */
+export const GRADE_MAX = CHECKLIST_ITEMS.reduce((sum, i) => sum + i.points, 0);
+
+/** "If trigger fires and score >= 70, I ENTER. No exceptions." */
+export const TAKE_IT_THRESHOLD = 70;
+
+/** Post-hoc, from the plan's own legend plus the tags already in use. */
+export const MISTAKE_TAGS = [
+  'Clean', 'Entered early', 'Entered late', 'Cut early', 'Moved stop',
+  'No trigger', 'Rule break', 'Oversized', 'Pattern trading', 'Market rejection',
+] as const;
+export type MistakeTag = (typeof MISTAKE_TAGS)[number];
+
+/** The honest re-grade after the close, which is allowed to be harsher. */
+export const REGRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'F'] as const;
+export type Regrade = (typeof REGRADES)[number];
+
+/** Why a valid setup was skipped. The plan calls this the most important sheet. */
+export const SKIP_REASONS = ['Fear', 'Rule', 'Distracted', 'Missed it'] as const;
+export type SkipReason = (typeof SKIP_REASONS)[number];
 
 /** Per-reason cluster identity. Hue drives the halo, the edges and the header. */
 export const REASON_HUE: Record<Reason, number> = {

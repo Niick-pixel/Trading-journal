@@ -23,12 +23,12 @@ export function filtersActive(f: Filters): boolean {
 
 /** Filtering never removes a node — it re-runs the layout so positions animate. */
 export function applyFilters(filters: Filters) {
-  return (t: { date: string; outcome: Outcome; session: Session; grade_total: number }) => {
+  return (t: { date: string; outcome: Outcome; session: Session; checklist_score: number }) => {
     if (filters.from && t.date < filters.from) return false;
     if (filters.to && t.date > `${filters.to}T23:59`) return false;
     if (filters.outcomes.length && !filters.outcomes.includes(t.outcome)) return false;
     if (filters.sessions.length && !filters.sessions.includes(t.session)) return false;
-    if (t.grade_total < filters.minGrade) return false;
+    if (t.checklist_score < filters.minGrade) return false;
     return true;
   };
 }
@@ -114,15 +114,17 @@ export function Toolbar({
           initial={{ scale: 0.7, opacity: 0.5 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={springBouncy}
-          className="w-3 tabular-nums text-[11px] font-semibold"
+          className="w-6 tabular-nums text-[11px] font-semibold"
           style={{ color: filters.minGrade > 0 ? 'rgb(var(--accent))' : 'var(--text-dim)' }}
         >
           {filters.minGrade}
         </motion.span>
         <input
-          type="range" min={0} max={GRADE_MAX} value={filters.minGrade}
+          // Every weight in the checklist is a multiple of 5, so no score
+          // between the steps is reachable.
+          type="range" min={0} max={GRADE_MAX} step={5} value={filters.minGrade}
           onChange={(e) => onChange({ ...filters, minGrade: Number(e.target.value) })}
-          className="w-20"
+          className="w-24"
         />
       </label>
 
