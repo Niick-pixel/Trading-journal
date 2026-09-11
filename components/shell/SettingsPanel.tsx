@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { press, spring, springSoft } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +35,36 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const { prefs, update, reset } = usePreferences();
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Restores from an export. Idempotent on id, so importing the same file
+   * twice is safe — which matters, because the obvious way to check a backup
+   * worked is to import it again.
+   */
+  async function runImport(file: File) {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const body = await file.text();
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      const json = await res.json();
+      setImportResult(res.ok
+        ? `${json.imported} imported, ${json.skipped} already here${json.rejected?.length ? `, ${json.rejected.length} rejected` : ''}.`
+        : (json.error ?? 'Import failed.'));
+      if (res.ok && json.imported > 0) window.location.reload();
+    } catch {
+      setImportResult('Could not read that file.');
+    } finally {
+      setImporting(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -135,10 +165,37 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </p>
             </Section>
 
+            {importResult && (
+              <p className="mt-3 text-[11px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+                {importResult}
+              </p>
+            )}
+
             <div className="mt-5 flex flex-wrap gap-2">
               {typeof window !== 'undefined' && window.signature?.isDesktop && (
                 <Button onClick={() => window.signature?.openDataFolder()}>Open folder</Button>
               )}
+              {/* One zip: trades.json, trades.csv, and every screenshot. */}
+              <a href="/api/export" download className="outline-none">
+                <Button tabIndex={-1}>Export everything</Button>
+              </a>
+              <Button onClick={() => importRef.current?.click()} disabled={importing}>
+                {importing ? 'Importing…' : 'Import JSON'}
+              </Button>
+              <a href="/trash" className="outline-none">
+                <Button tabIndex={-1}>Trash</Button>
+              </a>
+              <input
+                ref={importRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) runImport(f);
+                  e.target.value = '';
+                }}
+              />
               <Button
                 onClick={async () => {
                   if (!info?.dataDir) return;

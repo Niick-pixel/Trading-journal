@@ -5,12 +5,16 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CHECKLIST_PHASES, CONTEXT_FLAG_LIST, OUTCOMES, type Outcome } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
 import { spring, springSoft } from '@/lib/motion';
+import { derivedAdherence } from '@/lib/adherence';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from './TradeNode';
+import { FlagList } from './FlagList';
+import { History } from './History';
+import { Lightbox } from './Lightbox';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -68,6 +72,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
   const [rMultiple, setRMultiple] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [zoomed, setZoomed] = useState<string | null>(null);
 
   useEffect(() => {
     if (!trade) return;
@@ -75,6 +80,7 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
     setRMultiple(trade.r_multiple == null ? '' : String(trade.r_multiple));
     setSettling(false);
     setConfirmDelete(false);
+    setZoomed(null);
   }, [trade]);
 
   useEffect(() => {
@@ -96,10 +102,25 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
     onClose();
   }
 
+  /**
+   * Soft. The row and its screenshot stay; the Trash can put it back. The
+   * trade I most want to delete at 4pm is usually the one worth reading on
+   * Sunday.
+   */
   async function remove() {
     if (!trade) return;
     setBusy(true);
     await fetch(`/api/trades/${trade.id}`, { method: 'DELETE' });
+    setBusy(false);
+    onChanged();
+    onClose();
+  }
+
+  /** Same setup, second entry. The outcome is deliberately not copied. */
+  async function duplicate() {
+    if (!trade) return;
+    setBusy(true);
+    await fetch(`/api/trades/${trade.id}/duplicate`, { method: 'POST' });
     setBusy(false);
     onChanged();
     onClose();
@@ -132,9 +153,16 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                 background: 'color-mix(in srgb, var(--bg-raised) 88%, transparent)',
               }}
             >
+              {/* Entry, stop and target live on the chart rather than in the
+                  form, so the chart has to be openable. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/screenshots/${trade.screenshot_path}`} alt="Chart"
-                className="max-h-[46vh] w-full object-contain" style={{ background: 'var(--letterbox)' }} />
+              <img
+                src={`/api/screenshots/${trade.screenshot_path}`}
+                alt="Chart — click to zoom"
+                onClick={() => setZoomed(`/api/screenshots/${trade.screenshot_path}`)}
+                className="max-h-[46vh] w-full cursor-zoom-in object-contain"
+                style={{ background: 'var(--letterbox)' }}
+              />
 
               <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -231,6 +259,14 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Group>
+                    <Row
+                      label="Account"
+                      value={trade.account + (trade.account_label ? ` · ${trade.account_label}` : '')}
+                    />
+                    <Row
+                      label="Stage"
+                      value={trade.status + (trade.graded_post_hoc ? ' · graded after the fact' : ' · graded at entry')}
+                    />
                     <Row label="Setup" value={trade.setup_type} />
                     <Row label="HTF bias" value={trade.htf_bias} />
                     <Row label="Premium / discount" value={trade.premium_discount} />
@@ -239,11 +275,34 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                       value={`${trade.entry_price ?? '—'} · ${trade.take_profit ?? '—'} · ${trade.stop_loss ?? '—'}`} />
                   </Group>
                   <Group>
+                    {/*
+                      Tri-state, rendered as three states. Collapsing null to
+                      "No" here would put a claim on the record that was never
+                      made — the same bug as the form defaulting it to "Yes",
+                      just pointing the other way.
+                    */}
                     <Row
-                      label="Followed every rule"
+                      label="Said rules followed"
                       value={
-                        <span style={{ color: trade.followed_rules ? undefined : 'rgb(var(--grade-f))' }}>
-                          {trade.followed_rules ? 'Yes' : 'No'}
+                        <span
+                          style={{
+                            color: trade.followed_rules === null ? 'var(--text-faint)'
+                              : trade.followed_rules ? 'rgb(var(--outcome-win))'
+                              : 'rgb(var(--outcome-loss))',
+                          }}
+                        >
+                          {trade.followed_rules === null ? 'Unanswered' : trade.followed_rules ? 'Yes' : 'No'}
+                        </span>
+                      }
+                    />
+                    {/* What the checklist says, which is what the stats use. */}
+                    <Row
+                      label="Checklist says"
+                      value={
+                        <span style={{
+                          color: derivedAdherence(trade) ? 'rgb(var(--outcome-win))' : 'rgb(var(--outcome-loss))',
+                        }}>
+                          {derivedAdherence(trade) ? 'Rules followed' : 'Rule broken'}
                         </span>
                       }
                     />
@@ -253,7 +312,10 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                       label="Re-grade, honestly"
                       value={trade.regrade ? `${trade.grade_letter} → ${trade.regrade}` : '—'}
                     />
-                    <Row label="Mistake" value={trade.mistake_tag ?? '—'} />
+                    <Row
+                      label="Mistakes"
+                      value={trade.mistake_tags.length ? trade.mistake_tags.join(', ') : (trade.mistake_tag ?? '—')}
+                    />
                     <Row label="Contracts / risk / stop"
                       value={`${trade.contracts ?? '—'} · $${trade.risk_dollars ?? '—'} · ${trade.stop_points ?? '—'}pt`} />
                   </Group>
@@ -286,6 +348,9 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                   </div>
                 )}
 
+                <FlagList trade={trade} onChanged={onChanged} />
+                <History tradeId={trade.id} />
+
                 <div className="mt-10 flex flex-wrap items-center gap-3">
                   <AnimatePresence mode="wait">
                     {settling ? (
@@ -315,11 +380,14 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                         <a href={`/new?edit=${trade.id}`} className="outline-none">
                           <Button tabIndex={-1}>Edit</Button>
                         </a>
+                        <Button onClick={duplicate} disabled={busy}>Duplicate</Button>
                         <div className="ml-auto">
                           {confirmDelete ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>Delete this trade?</span>
-                              <Button variant="danger" onClick={remove} disabled={busy}>Delete</Button>
+                              <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+                                Move to Trash? It stays restorable.
+                              </span>
+                              <Button variant="danger" onClick={remove} disabled={busy}>Trash</Button>
                               <Button onClick={() => setConfirmDelete(false)}>Keep</Button>
                             </div>
                           ) : (
@@ -333,6 +401,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
               </motion.div>
             </motion.div>
           </div>
+
+          <Lightbox src={zoomed} alt="Chart" onClose={() => setZoomed(null)} />
         </>
       )}
     </AnimatePresence>

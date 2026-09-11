@@ -1,11 +1,13 @@
 import { listTrades } from '@/db/trades';
-import { INSTRUMENTS, REASON_HUE, SESSIONS, SETUP_TYPES } from '@/lib/domain';
+import { ACCOUNTS, INSTRUMENTS, REASON_HUE, SESSIONS, SETUP_TYPES, type Account } from '@/lib/domain';
 import { GRADE_COLOR } from '@/lib/grade';
 import { reasonAccent } from '@/lib/layout';
 import {
-  aggregate, byGradeBucket, byMacroTime, checklistEdge, discipline, edge, gradeHonesty,
-  groupByField, hesitation, losingReasons, money, rByReason, rByTargetType,
+  accountsInUse, aggregate, byGradeBucket, byMacroTime, checklistEdge, discipline, edge,
+  forAccount, gradeHonesty, groupByField, hesitation, losingReasons, money, preGradedOnly,
+  rByReason, rByTargetType,
 } from '@/lib/stats';
+import { AccountSwitcher } from '@/components/stats/AccountSwitcher';
 import { Line, Panel, RateBars, SignedBars, Stat, type BarRow } from '@/components/stats/Bars';
 import { TitleBar } from '@/components/shell/TitleBar';
 
@@ -20,9 +22,32 @@ const r2 = (v: number | null) => (v == null ? '—' : signed(v, 2));
 const usd = (v: number) =>
   `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-export default function StatsPage() {
-  const trades = listTrades();
-  const all = aggregate(trades);
+export default async function StatsPage(
+  { searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> },
+) {
+  const all = listTrades();
+  const accounts = accountsInUse(all);
+
+  // One account at a time. Defaults to whichever one actually has trades in
+  // it, never to a mixed total — backtest R and live R must never sum.
+  const asked = (await searchParams).account;
+  const requested = typeof asked === 'string' ? asked : undefined;
+  const account: Account | 'All' = requested === 'All'
+    ? 'All'
+    : (ACCOUNTS as readonly string[]).includes(requested ?? '')
+      ? (requested as Account)
+      : (accounts[0]?.account ?? 'Backtest (FX Replay)');
+
+  const scoped = forAccount(all, account);
+
+  /*
+    Hindsight-graded and pre-graded trades cannot be pooled without lying to
+    myself: a grade given after I already knew the result is not evidence that
+    the grading works. ?pregraded=1 drops everything logged in one shot.
+  */
+  const preOnly = (await searchParams).pregraded === '1';
+  const trades = preOnly ? preGradedOnly(scoped) : scoped;
+  const agg = aggregate(trades);
   const m = money(trades);
   const e = edge(trades);
   const leaks = losingReasons(trades);
@@ -117,8 +142,26 @@ export default function StatsPage() {
       <TitleBar />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[68rem] px-6 pb-20 pt-4">
-          <header className="mb-6">
+          <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-[22px] font-semibold tracking-tight">Stats</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <AccountSwitcher available={accounts} current={account} />
+              <a
+                href={`/stats?${new URLSearchParams({
+                  ...(account === 'All' ? {} : { account }),
+                  ...(preOnly ? {} : { pregraded: '1' }),
+                })}`}
+                className="rounded-full border px-3.5 py-1.5 text-[12px] font-medium"
+                style={{
+                  borderColor: preOnly ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)',
+                  background: preOnly ? 'rgb(var(--accent) / 0.12)' : 'var(--glass-fill)',
+                  color: preOnly ? 'rgb(var(--accent))' : 'var(--text-dim)',
+                }}
+                title="Exclude trades that were logged in one shot after the fact"
+              >
+                Pre-graded only
+              </a>
+            </div>
           </header>
 
           {trades.length === 0 ? (
@@ -127,7 +170,40 @@ export default function StatsPage() {
             </div>
           ) : (
             <div className="space-y-5">
-              {/* The headline row. */}
+              {/*
+                Adherence is the headline, above P&L and larger, because it is
+                the only number here I fully control. A good month of P&L with
+                bad adherence is a warning, not a result.
+              */}
+              <Panel
+                title="Adherence"
+                note="Share of trades where the checklist itself says the rules were followed — trigger fired, 70 or more, no mistake tagged. Derived, never self-reported."
+              >
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <div>
+                    <div
+                      className="tabular-nums text-[46px] font-semibold leading-none tracking-tight"
+                      style={{
+                        color: d.adherenceRate == null ? 'var(--text-faint)'
+                          : d.adherenceRate >= 0.7 ? 'rgb(var(--outcome-win))'
+                          : d.adherenceRate >= 0.4 ? 'rgb(var(--accent))'
+                          : 'rgb(var(--outcome-loss))',
+                      }}
+                    >
+                      {pct(d.adherenceRate)}
+                    </div>
+                    <div className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                      n = {agg.count}
+                      {agg.count < 20 && ' — too few to conclude anything'}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-[12rem]">
+                    <Line label="Followed the rules" value={`${d.followed.count} · ${r(d.followed.totalR)}`} tone="win" />
+                    <Line label="Broke a rule" value={`${d.broken.count} · ${r(d.broken.totalR)}`} tone="loss" />
+                  </div>
+                </div>
+              </Panel>
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat
                   label="Net P&L"
@@ -137,14 +213,14 @@ export default function StatsPage() {
                 />
                 <Stat
                   label="Net R"
-                  value={r(all.totalR)}
+                  value={r(agg.totalR)}
                   sub={`+${e.rWon.toFixed(1)}R won · −${e.rLost.toFixed(1)}R lost`}
-                  tone={all.totalR > 0 ? 'win' : all.totalR < 0 ? 'loss' : null}
+                  tone={agg.totalR > 0 ? 'win' : agg.totalR < 0 ? 'loss' : null}
                 />
                 <Stat
                   label="Win rate"
-                  value={pct(all.winRate)}
-                  sub={`${all.wins}W · ${all.losses}L · ${all.breakeven + all.scratched} flat`}
+                  value={pct(agg.winRate)}
+                  sub={`${agg.wins}W · ${agg.losses}L · ${agg.breakeven + agg.scratched} flat`}
                 />
                 <Stat
                   label="Expectancy"
@@ -166,8 +242,8 @@ export default function StatsPage() {
                   <Line label="Longest loss streak" value={String(e.longestLossStreak)} />
                 </Panel>
 
-                <Panel title="Money" note={m.priced < all.taken
-                  ? `${m.priced} of ${all.taken} taken trades recorded a risk amount — the rest are excluded here.`
+                <Panel title="Money" note={m.priced < agg.taken
+                  ? `${m.priced} of ${agg.taken} taken trades recorded a risk amount — the rest are excluded here.`
                   : 'Risk in dollars against R returned.'}>
                   <Line label="Gross won" value={usd(m.won)} tone="win" />
                   <Line label="Gross lost" value={usd(m.lost)} tone="loss" />
@@ -208,6 +284,12 @@ export default function StatsPage() {
 
                 <Panel title="Win rate by grade" note="Does your grading predict outcomes? If these bars do not descend, it does not.">
                   <RateBars rows={gradeRows} />
+                  {agg.taken < 20 && (
+                    <p className="mt-3 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                      n = {agg.taken}. Under 20 trades these bars are noise — do not conclude anything
+                      about your grading from them yet.
+                    </p>
+                  )}
                 </Panel>
 
                 <Panel title="Macro windows" note="Inside :50–:10 and :20–:40, against everything else.">
@@ -248,6 +330,39 @@ export default function StatsPage() {
                 </Panel>
 
                 <Panel
+                  title="Self-assessment gap"
+                  note="How often I said I followed every rule and the checklist disagreed. That gap closing is real progress — and it cannot be faked by being hard on myself, which shows up as the row below it instead."
+                >
+                  {d.gap.answered === 0 ? (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      Nothing answered yet. The question is unset on every trade, which is the honest
+                      state — stats read the checklist regardless, so leaving it blank costs nothing.
+                    </p>
+                  ) : (
+                    <>
+                      <div
+                        className="tabular-nums text-[34px] font-semibold leading-none tracking-tight"
+                        style={{
+                          color: (d.gap.overclaimRate ?? 0) > 0.2
+                            ? 'rgb(var(--outcome-loss))' : 'rgb(var(--outcome-win))',
+                        }}
+                      >
+                        {pct(d.gap.overclaimRate)}
+                      </div>
+                      <p className="mb-3 mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                        said yes when the checklist said no · n = {d.gap.answered}
+                        {d.gap.answered < 20 && ' — too few to conclude anything'}
+                      </p>
+                      <Line label="Agreed" value={String(d.gap.agreed)} tone="win" />
+                      <Line label="Overclaimed" value={String(d.gap.overclaimed)}
+                        tone={d.gap.overclaimed ? 'loss' : null} />
+                      <Line label="Underclaimed" value={String(d.gap.underclaimed)} />
+                      <Line label="Never answered" value={String(d.gap.unanswered)} />
+                    </>
+                  )}
+                </Panel>
+
+                <Panel
                   title="Grade honesty"
                   note="The score at entry against the re-grade after the close. A pattern of dropping means the boxes are being ticked to reach a number."
                 >
@@ -257,7 +372,7 @@ export default function StatsPage() {
                     </p>
                   ) : (
                     <>
-                      <Line label="Re-graded" value={`${honesty.regraded} of ${all.count}`} />
+                      <Line label="Re-graded" value={`${honesty.regraded} of ${agg.count}`} />
                       <Line label="Graded too kindly" value={String(honesty.inflated)}
                         tone={honesty.inflated ? 'loss' : 'win'} />
                       <Line label="Held up" value={String(honesty.matched)} tone="win" />
@@ -336,9 +451,15 @@ export default function StatsPage() {
                 </Panel>
               </div>
 
-              {all.passed > 0 && (
+              {preOnly && (
+                <p className="pt-1 text-center text-[11px]" style={{ color: 'rgb(var(--accent))' }}>
+                  Showing only trades graded before the outcome was known — {trades.length} of {scoped.length}.
+                </p>
+              )}
+
+              {agg.passed > 0 && (
                 <p className="pt-1 text-center text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  {all.passed} setup{all.passed === 1 ? '' : 's'} passed on — journalled, but never counted in any
+                  {agg.passed} setup{agg.passed === 1 ? '' : 's'} passed on — journalled, but never counted in any
                   number above.
                 </p>
               )}

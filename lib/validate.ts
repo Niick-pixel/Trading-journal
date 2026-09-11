@@ -1,7 +1,8 @@
 import {
-  CHECKLIST_KEYS, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAGS, OUTCOMES,
-  PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES, SKIP_REASONS, TARGET_TYPES,
-  type ChecklistKey, type ContextFlag,
+  ACCOUNTS, CHECKLIST_KEYS, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAGS,
+  OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
+  TARGET_TYPES, TRADE_STATUSES,
+  type ChecklistKey, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
 import { MIN_EXPLANATION, type TradeInput } from './types';
 
@@ -19,11 +20,25 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
     return typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : null;
   };
   const bool = (field: string) => t[field] === true;
+  /**
+   * Tri-state. Anything that is not an explicit true or false is unanswered —
+   * which is the honest reading of a payload from an older client that never
+   * had the question, and of a form the user did not touch.
+   */
+  const tri = (field: string): Tri => {
+    const v = t[field];
+    return v === true || v === false ? v : null;
+  };
   const numOrNull = (field: string): number | null => {
     const v = t[field];
     if (v === null || v === undefined || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+  };
+  /** Risk is a magnitude. A negative one silently turns every loss into a win. */
+  const positiveOrNull = (field: string): number | null => {
+    const n = numOrNull(field);
+    return n == null || n < 0 ? null : n;
   };
 
   const reason = oneOf('reason', REASONS);
@@ -69,9 +84,24 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       // Every checklist answer, read the same way; absent means false, which is
       // what an older client or an unanswered box means.
       ...(Object.fromEntries(CHECKLIST_KEYS.map((k) => [k, bool(k)])) as Record<ChecklistKey, boolean>),
-      followed_rules: t.followed_rules !== false,
+      followed_rules: tri('followed_rules'),
       regrade: oneOf('regrade', REGRADES),
-      mistake_tag: oneOf('mistake_tag', MISTAKE_TAGS),
+      // Legacy single tag. Nothing writes it any more; it is preserved so the
+      // values saved under the old taxonomy are not silently erased on edit.
+      mistake_tag: typeof t.mistake_tag === 'string' ? t.mistake_tag : null,
+      mistake_tags: Array.isArray(t.mistake_tags)
+        ? (t.mistake_tags.filter(
+            (v): v is MistakeTag => typeof v === 'string' && (MISTAKE_TAGS as readonly string[]).includes(v),
+          ))
+        : [],
+      account: oneOf('account', ACCOUNTS) ?? 'Backtest (FX Replay)',
+      account_label: typeof t.account_label === 'string' && t.account_label.trim()
+        ? t.account_label.trim() : null,
+      status: oneOf('status', TRADE_STATUSES) ?? 'Settled',
+      grade_at_entry: numOrNull('grade_at_entry'),
+      // Absent means it was written in one shot, after the fact — which is what
+      // every trade logged from the plain form is.
+      graded_post_hoc: t.graded_post_hoc !== false,
       entry_price: numOrNull('entry_price'),
       take_profit: numOrNull('take_profit'),
       stop_loss: numOrNull('stop_loss'),
@@ -79,7 +109,11 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       r_left_on_table: numOrNull('r_left_on_table'),
       skip_reason: oneOf('skip_reason', SKIP_REASONS),
       contracts: numOrNull('contracts'),
-      risk_dollars: numOrNull('risk_dollars'),
+      // Clamped, not rejected — nothing here is allowed to refuse a save. A
+      // negative risk is a typo for a percentage, and keeping it would invert
+      // the P&L, so it is dropped rather than stored.
+      risk_dollars: positiveOrNull('risk_dollars'),
+      risk_percent: positiveOrNull('risk_percent'),
       stop_points: numOrNull('stop_points'),
       outcome: outcome!,
       r_multiple: numOrNull('r_multiple'),

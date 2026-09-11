@@ -20,6 +20,7 @@ export const DATA_DIR = process.env.SIGNATURE_DATA_DIR
 
 export const DB_PATH = path.join(DATA_DIR, 'journal.db');
 export const SCREENSHOTS_DIR = path.join(DATA_DIR, 'screenshots');
+export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 
 /**
  * Migration files ship as .sql on disk, so their location has the same problem.

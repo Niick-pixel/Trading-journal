@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { deleteTrade, getTrade, updateTrade } from '@/db/trades';
+import { getTrade, purgeTrade, softDeleteTrade, updateTrade } from '@/db/trades';
 import { saveScreenshot, deleteScreenshot } from '@/db/screenshots';
 import { parseTradeInput } from '@/lib/validate';
 
@@ -40,7 +40,16 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
   }
 }
 
-export async function DELETE(_r: Request, ctx: { params: Promise<{ id: string }> }) {
-  const ok = deleteTrade((await ctx.params).id);
-  return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'Not found' }, { status: 404 });
+/**
+ * Soft by default. ?purge=1 is the separate, deliberate act that actually
+ * destroys the row, its screenshot and its history — nothing in the UI reaches
+ * it from the same button as a delete.
+ */
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const purge = new URL(request.url).searchParams.get('purge') === '1';
+  const ok = purge ? purgeTrade(id) : softDeleteTrade(id);
+  return ok
+    ? NextResponse.json({ ok: true, purged: purge })
+    : NextResponse.json({ error: 'Not found' }, { status: 404 });
 }

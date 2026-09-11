@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { DATA_DIR, DB_PATH } from '../lib/paths';
 import { migrate } from './migrate';
+import { backupToday } from './backup';
 
 /**
  * SQLite comes from `node:sqlite`, built into Node itself.
@@ -29,6 +30,16 @@ export function getDb(): DatabaseSync {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA synchronous = NORMAL');
+
+  // A snapshot BEFORE any migration runs. A table-rebuild migration is the one
+  // moment this journal is genuinely at risk, and the transaction only protects
+  // against a failure the migration notices.
+  try {
+    backupToday(db);
+  } catch (err) {
+    // A backup that cannot be written must never stop the app from opening.
+    console.warn('[signature] daily backup failed:', err);
+  }
 
   migrate(db);
 

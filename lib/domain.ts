@@ -189,12 +189,53 @@ export const GRADE_MAX = CHECKLIST_ITEMS.reduce((sum, i) => sum + i.points, 0);
 /** "If trigger fires and score >= 70, I ENTER. No exceptions." */
 export const TAKE_IT_THRESHOLD = 70;
 
-/** Post-hoc, from the plan's own legend plus the tags already in use. */
+/**
+ * What went wrong, after the fact. Multi-select, because a bad trade usually
+ * has three — "entered late" and "chased" and "oversized" are one story, and
+ * forcing a single choice throws two thirds of it away.
+ */
 export const MISTAKE_TAGS = [
-  'Clean', 'Entered early', 'Entered late', 'Cut early', 'Moved stop',
-  'No trigger', 'Rule break', 'Oversized', 'Pattern trading', 'Market rejection',
+  'Entered late', 'Entered early', 'No trigger', 'Chased', 'Moved stop',
+  'Cut winner early', 'Oversized', 'Undersized', 'Outside killzone',
+  'Against HTF bias', 'No defined target', 'Revenge', 'Overtraded',
+  'Ignored news', 'Widened stop',
 ] as const;
 export type MistakeTag = (typeof MISTAKE_TAGS)[number];
+
+/**
+ * Backtest R and live R must never sum into the same number. Replay fills are
+ * not real fills, and a demo account has no fear in it.
+ */
+export const ACCOUNTS = ['Backtest (FX Replay)', 'Demo', 'Live'] as const;
+export type Account = (typeof ACCOUNTS)[number];
+
+/**
+ * Two-stage logging, available but never required. 'Settled' is the default
+ * because logging a finished trade in one shot has to stay the fast path — a
+ * trade written in ten seconds after a bad session beats a perfect record that
+ * never gets written.
+ */
+export const TRADE_STATUSES = ['Planned', 'Live', 'Settled'] as const;
+export type TradeStatus = (typeof TRADE_STATUSES)[number];
+
+/**
+ * Tri-state, for questions where "I didn't answer" is a real and different
+ * answer from "no".
+ *
+ * followed_rules used to be a plain boolean defaulting to true, which meant
+ * every trade ever saved claimed full rule adherence whether or not the
+ * question had been looked at. Unanswered is now representable, and is the
+ * default.
+ */
+export type Tri = boolean | null;
+export const TRI_LABELS = { unset: 'Unset', yes: 'Yes', no: 'No' } as const;
+
+export function triToLabel(v: Tri): 'Unset' | 'Yes' | 'No' {
+  return v === null ? 'Unset' : v ? 'Yes' : 'No';
+}
+export function labelToTri(v: 'Unset' | 'Yes' | 'No'): Tri {
+  return v === 'Unset' ? null : v === 'Yes';
+}
 
 /** The honest re-grade after the close, which is allowed to be harsher. */
 export const REGRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'F'] as const;

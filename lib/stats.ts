@@ -1,7 +1,8 @@
 import {
-  CHECKLIST_ITEMS, REASONS, SKIP_REASONS, TARGET_TYPES, isTaken,
-  type ChecklistKey, type Reason, type SkipReason, type TargetType,
+  ACCOUNTS, CHECKLIST_ITEMS, REASONS, SKIP_REASONS, TARGET_TYPES, isTaken,
+  type Account, type ChecklistKey, type Reason, type SkipReason, type TargetType,
 } from './domain';
+import { adherenceGap, derivedAdherence, type AdherenceGap } from './adherence';
 import { GRADE_BUCKETS } from './grade';
 import { isMacroTime } from './macro';
 import type { Trade } from './types';
@@ -274,11 +275,18 @@ export interface Discipline {
   costOfBreaking: number;
   /** Taken without both Phase 3 answers — entries the plan says don't exist. */
   untriggered: Aggregate;
+  /** What I claimed against what the record shows. */
+  gap: AdherenceGap;
+  /** Share of trades where the derived answer is true. Null with no trades. */
+  adherenceRate: number | null;
 }
 
 export function discipline(trades: Trade[]): Discipline {
-  const followed = trades.filter((t) => t.followed_rules);
-  const broken = trades.filter((t) => !t.followed_rules);
+  // Derived, not self-reported. What I said about my own discipline is the
+  // weakest data in the journal — it is answered at the moment I am least able
+  // to be objective. The checklist and the mistake tags already know.
+  const followed = trades.filter((t) => derivedAdherence(t));
+  const broken = trades.filter((t) => !derivedAdherence(t));
   const untriggered = trades.filter((t) => isTaken(t.outcome) && !t.trigger_fired);
 
   return {
@@ -286,6 +294,9 @@ export function discipline(trades: Trade[]): Discipline {
     broken: aggregate(broken),
     costOfBreaking: aggregate(broken).totalR,
     untriggered: aggregate(untriggered),
+    gap: adherenceGap(trades),
+    /** The headline. The one number I fully control. */
+    adherenceRate: trades.length ? followed.length / trades.length : null,
   };
 }
 
@@ -430,4 +441,32 @@ export function checklistEdge(trades: Trade[]): ItemEdge[] {
       lift: withAvgR != null && withoutAvgR != null ? withAvgR - withoutAvgR : null,
     };
   });
+}
+
+
+/**
+ * One account at a time.
+ *
+ * Replay fills are not real fills and a demo account has no fear in it, so
+ * summing backtest R into live R would make every figure downstream a lie.
+ * This is applied before anything else in this file runs.
+ */
+export function forAccount(trades: Trade[], account: Account | 'All'): Trade[] {
+  return account === 'All' ? trades : trades.filter((t) => t.account === account);
+}
+
+/** Accounts that actually have trades in them, with counts. */
+export function accountsInUse(trades: Trade[]): Array<{ account: Account; count: number }> {
+  return ACCOUNTS
+    .map((account) => ({ account, count: trades.filter((t) => t.account === account).length }))
+    .filter((a) => a.count > 0);
+}
+
+/**
+ * Hindsight-graded and pre-graded trades cannot be pooled without lying to
+ * myself: a grade given after I knew the result is not evidence that the
+ * grading works.
+ */
+export function preGradedOnly(trades: Trade[]): Trade[] {
+  return trades.filter((t) => !t.graded_post_hoc);
 }

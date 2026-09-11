@@ -8,6 +8,7 @@ import { spring, springLayout } from '@/lib/motion';
 import { NODE_H, NODE_W } from '@/lib/layout';
 import type { Outcome } from '@/lib/domain';
 import type { Trade } from '@/lib/types';
+import { hasOpenFlags } from '@/lib/flags';
 
 /** Border colour carries the outcome. Nothing else on the card does. */
 export const OUTCOME_COLOR: Record<Outcome, string> = {
@@ -31,6 +32,9 @@ function TradeNodeInner({ data }: NodeProps) {
   const outcome = OUTCOME_COLOR[trade.outcome];
   const grade = GRADE_COLOR[gradeLetter(trade.checklist_score)];
   const passed = trade.outcome === 'Not taken';
+  // Descriptive, never blocking — it was saved exactly as written. The dot
+  // just means there is a contradiction worth a look at review time.
+  const flagged = hasOpenFlags(trade);
 
   return (
     <motion.div
@@ -51,6 +55,17 @@ function TradeNodeInner({ data }: NodeProps) {
       }}
       className="group glass relative cursor-pointer overflow-hidden rounded-[18px]"
     >
+      {flagged && (
+        <span
+          title="This record contradicts itself — open it to see how"
+          className="absolute left-2 top-2 z-[4] size-2 rounded-full"
+          style={{
+            background: 'rgb(var(--amber))',
+            boxShadow: '0 0 8px rgb(var(--amber) / 0.9)',
+          }}
+        />
+      )}
+
       {/* React Flow needs handles to anchor edges, but they must not be seen. */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />

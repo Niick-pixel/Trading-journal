@@ -2,7 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { OUTCOMES, SESSIONS, type Outcome, type Session } from '@/lib/domain';
+import { ACCOUNTS, type Account } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
+import { hasOpenFlags } from '@/lib/flags';
+import type { Trade } from '@/lib/types';
 import { press, spring, springBouncy } from '@/lib/motion';
 import { useGlowState } from '@/components/ui/Field';
 import { OUTCOME_COLOR } from './TradeNode';
@@ -13,22 +16,38 @@ export interface Filters {
   outcomes: Outcome[];
   sessions: Session[];
   minGrade: number;
+  /** Only trades whose record contradicts itself — the weekly review list. */
+  onlyFlagged: boolean;
+  /**
+   * One account at a time. The cluster headers carry R totals, so mixing
+   * backtest and live here would be the same lie as mixing them in Stats.
+   */
+  account: Account | 'All';
 }
 
-export const EMPTY_FILTERS: Filters = { from: '', to: '', outcomes: [], sessions: [], minGrade: 0 };
+export const EMPTY_FILTERS: Filters = {
+  from: '', to: '', outcomes: [], sessions: [], minGrade: 0, onlyFlagged: false, account: 'All',
+};
 
 export function filtersActive(f: Filters): boolean {
-  return Boolean(f.from || f.to || f.outcomes.length || f.sessions.length || f.minGrade > 0);
+  return Boolean(
+    f.from || f.to || f.outcomes.length || f.sessions.length
+    || f.minGrade > 0 || f.onlyFlagged || f.account !== 'All',
+  );
 }
 
 /** Filtering never removes a node — it re-runs the layout so positions animate. */
 export function applyFilters(filters: Filters) {
-  return (t: { date: string; outcome: Outcome; session: Session; checklist_score: number }) => {
+  return (t: Trade) => {
     if (filters.from && t.date < filters.from) return false;
     if (filters.to && t.date > `${filters.to}T23:59`) return false;
     if (filters.outcomes.length && !filters.outcomes.includes(t.outcome)) return false;
     if (filters.sessions.length && !filters.sessions.includes(t.session)) return false;
     if (t.checklist_score < filters.minGrade) return false;
+    // The starting list for a weekly review: every record that argues with
+    // itself and has not been explained away.
+    if (filters.onlyFlagged && !hasOpenFlags(t)) return false;
+    if (filters.account !== 'All' && t.account !== filters.account) return false;
     return true;
   };
 }
@@ -76,8 +95,15 @@ function Chip({
 }
 
 export function Toolbar({
-  filters, onChange, shown, total,
-}: { filters: Filters; onChange: (next: Filters) => void; shown: number; total: number }) {
+  filters, onChange, shown, total, selectMode, onToggleSelectMode,
+}: {
+  filters: Filters;
+  onChange: (next: Filters) => void;
+  shown: number;
+  total: number;
+  selectMode: boolean;
+  onToggleSelectMode: () => void;
+}) {
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
@@ -133,6 +159,53 @@ export function Toolbar({
         <DateField value={filters.from} onChange={(from) => onChange({ ...filters, from })} />
         <DateField value={filters.to} onChange={(to) => onChange({ ...filters, to })} />
       </div>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
+          Account
+        </span>
+        {(['All', ...ACCOUNTS] as const).map((a) => (
+          <Chip
+            key={a}
+            label={a === 'Backtest (FX Replay)' ? 'Backtest' : a}
+            active={filters.account === a}
+            onClick={() => onChange({ ...filters, account: a })}
+          />
+        ))}
+      </div>
+
+      {/* The weekly-review starting list. */}
+      <motion.button
+        type="button"
+        onClick={() => onChange({ ...filters, onlyFlagged: !filters.onlyFlagged })}
+        whileTap={press}
+        transition={spring}
+        animate={{
+          borderColor: filters.onlyFlagged ? 'rgb(var(--amber) / 0.55)' : 'var(--glass-stroke)',
+          background: filters.onlyFlagged ? 'rgb(var(--amber) / 0.12)' : 'var(--glass-fill)',
+        }}
+        className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium"
+        style={{ color: filters.onlyFlagged ? 'rgb(var(--amber))' : 'var(--text-dim)' }}
+      >
+        <span className="size-1.5 rounded-full" style={{ background: 'rgb(var(--amber))' }} />
+        Flagged
+      </motion.button>
+
+      {/* Bulk edit needs a mode, because a click already means "open this". */}
+      <motion.button
+        type="button"
+        onClick={onToggleSelectMode}
+        whileTap={press}
+        transition={spring}
+        animate={{
+          borderColor: selectMode ? 'rgb(var(--accent) / 0.55)' : 'var(--glass-stroke)',
+          background: selectMode ? 'rgb(var(--accent) / 0.12)' : 'var(--glass-fill)',
+        }}
+        className="rounded-full border px-3 py-1.5 text-[11px] font-medium"
+        style={{ color: selectMode ? 'rgb(var(--accent))' : 'var(--text-dim)' }}
+      >
+        {selectMode ? 'Selecting' : 'Select'}
+      </motion.button>
 
       <div className="ml-auto flex items-center gap-3">
         <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>

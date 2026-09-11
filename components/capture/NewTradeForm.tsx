@@ -1,18 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  CHECKLIST_KEYS, CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
-  MISTAKE_TAGS, OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES,
-  SKIP_REASONS, TARGET_TYPES,
-  type ChecklistKey, type ContextFlag, type Direction, type HtfBias, type Instrument,
-  type MistakeTag, type Outcome, type PremiumDiscount, type Regrade, type SkipReason,
-  type Reason, type Session, type SetupType, type TargetType,
+  ACCOUNTS, CHECKLIST_KEYS, CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
+  OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES,
+  SKIP_REASONS, TARGET_TYPES, TRADE_STATUSES,
+  type Account, type ChecklistKey, type ContextFlag, type Direction, type HtfBias,
+  type Instrument, type MistakeTag, type Outcome, type PremiumDiscount, type Regrade,
+  type SkipReason, type Reason, type Session, type SetupType, type TargetType,
+  type TradeStatus, type Tri,
 } from '@/lib/domain';
 import { GRADE_MAX, checklistScore, triggerFired } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
-import { spring, springSoft, riseIn } from '@/lib/motion';
+import { press, spring, springSoft, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
 import { MIN_EXPLANATION, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +23,8 @@ import { Segmented } from '@/components/ui/Segmented';
 import { Select } from '@/components/ui/Select';
 import { OUTCOME_COLOR } from '@/components/whiteboard/TradeNode';
 import { TogglePill } from '@/components/ui/TogglePill';
+import { TriState } from '@/components/ui/TriState';
+import { TagPicker } from '@/components/ui/TagPicker';
 import { Checklist } from './Checklist';
 import { ExplanationField } from './ExplanationField';
 import { ScreenshotDropzone } from './ScreenshotDropzone';
@@ -56,9 +59,16 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const setCheck = (key: ChecklistKey, value: boolean) =>
     setChecks((prev) => ({ ...prev, [key]: value }));
 
-  const [followedRules, setFollowedRules] = useState(trade?.followed_rules ?? true);
+  // Tri-state, starting unanswered. This used to default to `true`, so every
+  // trade ever saved claimed full rule adherence whether or not the question
+  // had been looked at. Nothing on this form starts in the affirmative now.
+  const [followedRules, setFollowedRules] = useState<Tri>(trade?.followed_rules ?? null);
   const [regrade, setRegrade] = useState<Regrade | null>(trade?.regrade ?? null);
-  const [mistakeTag, setMistakeTag] = useState<MistakeTag | null>(trade?.mistake_tag ?? null);
+  const [mistakeTags, setMistakeTags] = useState<MistakeTag[]>(trade?.mistake_tags ?? []);
+  const [account, setAccount] = useState<Account>(trade?.account ?? 'Backtest (FX Replay)');
+  const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
+  const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
+  const [riskPercent, setRiskPercent] = useState(trade?.risk_percent?.toString() ?? '');
   const [entryPrice, setEntryPrice] = useState(trade?.entry_price?.toString() ?? '');
   const [takeProfit, setTakeProfit] = useState(trade?.take_profit?.toString() ?? '');
   const [stopLoss, setStopLoss] = useState(trade?.stop_loss?.toString() ?? '');
@@ -81,19 +91,39 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [rMultiple, setRMultiple] = useState(trade?.r_multiple?.toString() ?? '');
   const [lesson, setLesson] = useState(trade?.lesson ?? '');
 
-  // Macro time derives from the timestamp; an explicit toggle wins and is
-  // remembered as an override so a later date edit doesn't silently undo it.
+  /*
+    The entry time is still checked against the macro windows, but the answer
+    is offered rather than asserted.
+    This pill used to arrive pre-ticked whenever the clock happened to be
+    inside a window, which put an unasked-for claim on the record — the same
+    class of bug as followed_rules defaulting to yes. Nothing on this form
+    starts affirmative now; the derived window is shown as a sentence you can
+    act on instead.
+  */
   const derivedWindow = useMemo(() => macroWindowFor(date), [date]);
   const [macroOverride, setMacroOverride] = useState<boolean | null>(
-    trade && !trade.macro_time_auto ? trade.macro_time : null,
+    trade ? trade.macro_time : null,
   );
-  const macroTime = macroOverride ?? derivedWindow !== null;
+  const macroTime = macroOverride ?? false;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Escape leaves the form the same way it closes the detail panel. Nothing is
+  // saved on the way out — a half-written trade is not a trade.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+      if (e.key === 'Escape' && !typing) window.location.href = '/';
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const total = checklistScore(checks);
   const fired = triggerFired(checks);
+  const planned = status === 'Planned';
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
   const explanationOk = explanation.trim().length >= MIN_EXPLANATION;
   const canSubmit = (Boolean(file) || editing) && Boolean(reason) && explanationOk && !submitting;
@@ -116,13 +146,27 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       premium_discount: premiumDiscount, target_type: targetType,
       ...checks,
       followed_rules: followedRules,
-      regrade, mistake_tag: mistakeTag,
+      regrade,
+      // The legacy single tag is carried through untouched so an edit never
+      // erases a value written under the old taxonomy.
+      mistake_tag: trade?.mistake_tag ?? null,
+      mistake_tags: mistakeTags,
+      account, account_label: accountLabel.trim() || null,
+      status,
+      // Freeze the score as it stands now if this is being planned before the
+      // outcome is known; a one-shot entry has no pre-outcome grade to keep.
+      grade_at_entry: status === 'Planned' ? total : (trade?.grade_at_entry ?? total),
+      // True unless this record was opened as a Plan and settled later.
+      graded_post_hoc: trade ? trade.graded_post_hoc : status !== 'Planned',
       entry_price: num(entryPrice), take_profit: num(takeProfit), stop_loss: num(stopLoss),
       would_have_hit_tp: wouldHaveHitTp,
       r_left_on_table: num(rLeftOnTable),
       skip_reason: skipReason,
-      contracts: num(contracts), risk_dollars: num(riskDollars), stop_points: num(stopPoints),
-      outcome, r_multiple: num(rMultiple),
+      contracts: num(contracts), risk_dollars: num(riskDollars), risk_percent: num(riskPercent),
+      stop_points: num(stopPoints),
+      // A plan has no result. Storing one would be inventing a trade.
+      outcome: planned ? 'Not taken' : outcome,
+      r_multiple: planned ? null : num(rMultiple),
       explanation: explanation.trim(), lesson: lesson.trim() || null,
     }));
 
@@ -150,27 +194,105 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
 
   return (
     <motion.div {...riseIn} transition={spring} className="glass rounded-[28px] p-7 sm:p-9">
-      <div className="mb-7">
-        <h1 className="text-[22px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
-        <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
-          {editing
-            ? 'Paste a new chart to replace the screenshot, or leave it as it is.'
-            : 'Name the motive before the data. That is the whole point.'}
-        </p>
+      <div className="mb-7 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
+          <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
+            {editing
+              ? 'Paste a new chart to replace the screenshot, or leave it as it is.'
+              : 'Name the motive before the data. That is the whole point.'}
+          </p>
+        </div>
+
+        {/* The board is still behind this card; there was no way back to it
+            without saving or using the browser's own history. */}
+        <motion.button
+          type="button"
+          aria-label="Close without saving"
+          title="Close without saving (Esc)"
+          onClick={() => { window.location.href = '/'; }}
+          whileTap={press}
+          whileHover={{ scale: 1.06 }}
+          transition={spring}
+          className="grid size-8 shrink-0 place-items-center rounded-full"
+          style={{
+            background: 'var(--glass-fill)',
+            border: '1px solid var(--glass-stroke)',
+            color: 'var(--text-dim)',
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor"
+              strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </motion.button>
       </div>
 
       <div className="space-y-8">
         {/* 1 — how it ended. You already know this before you start typing, and
             burying it behind a disclosure made it the last thing recorded. */}
-        <Field label="How did it end">
-          <Segmented
-            value={outcome}
-            onChange={setOutcome}
-            options={OUTCOMES}
-            accentFor={(o) => OUTCOME_COLOR[o]}
-            labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
-          />
+        {/*
+          Account first, because it is the one field that must never be wrong:
+          backtest R and live R summing into one number would make every other
+          figure in the app a lie.
+        */}
+        <div className="mb-7 grid gap-5 sm:grid-cols-2">
+          <Field label="Account" hint="Backtest R and live R never sum into the same number.">
+            <Select value={account} onChange={setAccount} options={ACCOUNTS} />
+          </Field>
+          <Field label="Account label" hint="Optional — which prop firm, which phase.">
+            <Input placeholder="—" value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} />
+          </Field>
+        </div>
+
+        {/*
+          Two-stage logging is available, never required. 'Settled' stays the
+          default so a finished trade can still be written in one pass.
+        */}
+        <Field
+          label="Stage"
+          hint="Planned hides the outcome until you settle it, and freezes the grade you gave it before you knew."
+          className="mb-7"
+        >
+          <Segmented value={status} onChange={setStatus} options={TRADE_STATUSES} />
         </Field>
+
+        {/* A Planned trade has no outcome yet, so it is not asked for. */}
+        <AnimatePresence initial={false}>
+          {planned ? (
+            <motion.p
+              key="planned"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={springSoft}
+              className="overflow-hidden text-[12px] leading-relaxed"
+              style={{ color: 'var(--text-faint)' }}
+            >
+              Planned — the outcome is hidden until you settle it. The score you give it now is kept
+              as the entry grade, so hindsight cannot quietly rewrite it.
+            </motion.p>
+          ) : (
+            <motion.div
+              key="outcome"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={springSoft}
+              className="overflow-hidden"
+            >
+              <Field label="How did it end">
+                <Segmented
+                  value={outcome}
+                  onChange={setOutcome}
+                  options={OUTCOMES}
+                  accentFor={(o) => OUTCOME_COLOR[o]}
+                  labelFor={(o) => (o === 'Not taken' ? 'Passed' : o)}
+                />
+              </Field>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 2 — the chart. */}
         <ScreenshotDropzone
@@ -258,11 +380,9 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                 accent="var(--accent)"
               />
               <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                {macroOverride !== null
-                  ? 'Set by hand — it will not follow the timestamp.'
-                  : derivedWindow
-                    ? `Derived from the entry time (${derivedWindow}).`
-                    : 'Derived from the entry time — outside both macro windows.'}
+                {derivedWindow
+                  ? `The entry time falls inside the ${derivedWindow} macro — tick it if that mattered.`
+                  : 'The entry time is outside both macro windows.'}
               </p>
             </div>
 
@@ -283,38 +403,52 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               <Field label="Contracts">
                 <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
               </Field>
-              <Field label="Risk ($)">
-                <Input type="number" step="1" min="0" placeholder="—" value={riskDollars} onChange={(e) => setRiskDollars(e.target.value)} />
+              {/*
+                Dollars and percent are separate fields on purpose. A percentage
+                typed into the dollars box is not a small mistake: P&L is
+                risk x R, so a "-1.57" entered there turned a -1.9R loss into a
+                +$2.98 win. Negative values are now dropped on save.
+              */}
+              <Field label="Risk ($)" hint="Dollars risked. Not a percentage.">
+                <Input type="number" step="1" min="0" placeholder="—" value={riskDollars}
+                  onChange={(e) => setRiskDollars(e.target.value)} />
               </Field>
-              <Field label="Stop (points)" className="sm:col-span-2">
+              <Field label="Risk (%)" hint="Optional — percent of the account.">
+                <Input type="number" step="0.01" min="0" inputMode="decimal" placeholder="—"
+                  value={riskPercent} onChange={(e) => setRiskPercent(e.target.value)} />
+              </Field>
+              <Field label="Stop (points)" hint="Optional — it is on the screenshot." className="sm:col-span-2">
                 <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
               </Field>
             </div>
 
+            {/* All optional — the chart already shows them. */}
             <div className="grid gap-5 sm:grid-cols-3">
-              <Field label="Entry"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+              <Field label="Entry" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
                 value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} /></Field>
-              <Field label="Take profit"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+              <Field label="Take profit" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
                 value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)} /></Field>
-              <Field label="Stop loss"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+              <Field label="Stop loss" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
                 value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} /></Field>
             </div>
 
             {/* After the close: the honest part. */}
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
-                <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
-              </Field>
-              <Field label="Mistake tag">
-                <Select value={mistakeTag} onChange={setMistakeTag} options={MISTAKE_TAGS} placeholder="None" />
-              </Field>
-            </div>
+            <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
+              <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
+            </Field>
 
-            <TogglePill
-              checked={followedRules}
+            <Field
+              label="What went wrong"
+              hint="Pick every one that applies. A bad trade usually has three."
+            >
+              <TagPicker value={mistakeTags} onChange={setMistakeTags} />
+            </Field>
+
+            <TriState
+              value={followedRules}
               onChange={setFollowedRules}
               label="Followed ALL rules"
-              hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%."
+              hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
             />
 
             {/* Only meaningful for a setup you passed on — the plan calls this

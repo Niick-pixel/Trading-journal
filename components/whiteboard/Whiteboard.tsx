@@ -17,6 +17,7 @@ import { BoardControls } from './BoardControls';
 import { ClusterNode } from './ClusterNode';
 import { DetailPanel } from './DetailPanel';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
+import { BulkBar } from './BulkBar';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
 const nodeTypes = { trade: TradeNode, cluster: ClusterNode };
@@ -25,6 +26,12 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   const [trades, setTrades] = useState(initial);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // An explicit mode rather than React Flow's own selection: on this board a
+  // click already means "open this trade", and overloading it with
+  // shift-to-select made both gestures unreliable.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/trades');
@@ -37,7 +44,32 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
   const layout = useMemo(() => computeLayout(visible, scale), [visible, scale]);
 
-  const onOpen = useCallback((id: string) => { if (!readOnly) setOpenId(id); }, [readOnly]);
+  const onOpen = useCallback((id: string) => {
+    if (readOnly) return;
+    if (selectMode) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      return;
+    }
+    setOpenId(id);
+  }, [readOnly, selectMode]);
+
+  const applyBulk = useCallback(async (patch: Record<string, unknown>) => {
+    await fetch('/api/trades/bulk', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [...selectedIds], patch }),
+    });
+    await refresh();
+  }, [selectedIds, refresh]);
+
+  const leaveSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   const nodes = useMemo<Node[]>(() => {
     const clusterNodes: Node[] = layout.clusters.map((cluster, index) => ({
@@ -55,7 +87,14 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
       id: n.trade.id,
       type: 'trade',
       position: { x: n.x, y: n.y },
-      data: { trade: n.trade, selected: openId === n.trade.id, onOpen, scale, dimPassed: prefs.dimPassed },
+      data: {
+        trade: n.trade,
+        selected: selectMode ? selectedIds.has(n.trade.id) : openId === n.trade.id,
+        onOpen,
+        scale,
+        dimPassed: prefs.dimPassed,
+        selectMode,
+      },
       zIndex: 1,
       // Only the grab handle moves a node. See TradeNode for why.
       dragHandle: '.signature-drag-handle',
@@ -63,7 +102,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     }));
 
     return [...clusterNodes, ...tradeNodes];
-  }, [layout, openId, onOpen, scale, prefs.dimPassed]);
+  }, [layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds]);
 
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
@@ -196,11 +235,28 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           including their headers — which are the point of the screen. */}
       {!readOnly && (
         <div className="shrink-0 px-4 pb-2">
-          <Toolbar filters={filters} onChange={setFilters} shown={visible.length} total={trades.length} />
+          <Toolbar
+            filters={filters}
+            onChange={setFilters}
+            shown={visible.length}
+            total={trades.length}
+            selectMode={selectMode}
+            onToggleSelectMode={() => (selectMode ? leaveSelectMode() : setSelectMode(true))}
+          />
         </div>
       )}
 
       <div className="relative min-h-0 flex-1">
+      {/* Bulk edit — the only practical way to backfill an account or a reason
+          across a month of old entries. */}
+      <AnimatePresence>
+        {selectMode && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-6">
+            <BulkBar count={selectedIds.size} onApply={applyBulk} onCancel={leaveSelectMode} />
+          </div>
+        )}
+      </AnimatePresence>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
