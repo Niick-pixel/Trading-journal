@@ -14,6 +14,11 @@ export interface BarRow {
   display: string;
   /** Secondary text, e.g. trade count. */
   meta?: string;
+  /**
+   * Identity colour — a reason's cluster hue, say. Drawn as a dot beside the
+   * label, never as the bar: a positive total in FOMO red read as a loss.
+   */
+  swatch?: string;
   accent?: string;
   /** Draws a ring around the row — used for Diagonal trendline. */
   highlight?: boolean;
@@ -32,7 +37,9 @@ export function SignedBars({ rows }: { rows: BarRow[] }) {
       {rows.map((row, i) => {
         const negative = row.value < 0;
         const width = (Math.abs(row.value) / max) * 50;
-        const accent = row.accent ?? (negative ? LOSS : WIN);
+        // Signed bars are always coloured by sign. Anything else makes a chart
+        // about profit and loss lie about which is which.
+        const accent = negative ? LOSS : WIN;
 
         return (
           <div
@@ -43,8 +50,13 @@ export function SignedBars({ rows }: { rows: BarRow[] }) {
               : undefined}
           >
             <div className="mb-1 flex items-baseline justify-between gap-3">
-              <span className="truncate text-[12px]" style={{ color: row.highlight ? 'rgb(var(--accent))' : 'var(--text)' }}>
-                {row.label}
+              <span className="flex min-w-0 items-center gap-2 truncate text-[12px]"
+                style={{ color: row.highlight ? 'rgb(var(--accent))' : 'var(--text)' }}>
+                {row.swatch && (
+                  <span className="size-1.5 shrink-0 rounded-full"
+                    style={{ background: `rgb(${row.swatch})`, boxShadow: `0 0 6px rgb(${row.swatch} / 0.8)` }} />
+                )}
+                <span className="truncate">{row.label}</span>
               </span>
               <span className="shrink-0 tabular-nums text-[12px] font-semibold" style={{ color: `rgb(${accent})` }}>
                 {row.display}

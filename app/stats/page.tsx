@@ -26,7 +26,7 @@ export default function StatsPage() {
 
   const reasonRows: BarRow[] = rByReason(trades).map((g) => ({
     label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
-    meta: `· ${g.stats.count}`, accent: reasonAccent(g.key),
+    meta: `· ${g.stats.count}`, swatch: reasonAccent(g.key),
   }));
 
   const targetRows: BarRow[] = rByTargetType(trades).map((g) => ({
@@ -71,6 +71,7 @@ export default function StatsPage() {
   const leakRows: BarRow[] = leaks.map((l) => ({
     label: l.reason, value: -l.rLost, display: `−${l.rLost.toFixed(1)}R`,
     meta: `· ${l.losses} loss${l.losses === 1 ? '' : 'es'}`,
+    swatch: reasonAccent(l.reason),
   }));
 
   return (

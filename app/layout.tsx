@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { BottomLeftControls } from '@/components/shell/SettingsPanel';
 import { PreferencesProvider } from '@/components/shell/PreferencesProvider';
+import { NewTradeButton } from '@/components/shell/NewTradeButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BottomLeftControls>
             <ThemeToggle />
           </BottomLeftControls>
+          <NewTradeButton />
         </PreferencesProvider>
       </body>
     </html>

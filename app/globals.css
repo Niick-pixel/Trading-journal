@@ -26,16 +26,16 @@
 :root {
   color-scheme: light;
 
-  --bg: #ececed;
-  --bg-raised: #f7f7f8;
-  --text: #16161a;
-  --text-dim: #5c5c66;
-  --text-faint: #8a8a94;
+  --bg: #e9e2d4;
+  --bg-raised: #f6f1e6;
+  --text: #241b12;
+  --text-dim: #54452f;
+  --text-faint: #6f5d43;
 
   /* Liquid glass */
-  --glass-fill: rgba(255, 255, 255, 0.55);
-  --glass-fill-strong: rgba(255, 255, 255, 0.78);
-  --glass-stroke: rgba(0, 0, 0, 0.09);
+  --glass-fill: rgba(255, 251, 243, 0.58);
+  --glass-fill-strong: rgba(255, 252, 245, 0.82);
+  --glass-stroke: rgba(88, 66, 38, 0.14);
   /* The specular top edge — on light surfaces it is pure white, and it is
      still the line that sells the glass. */
   --glass-specular: rgba(255, 255, 255, 0.95);
@@ -43,37 +43,42 @@
 
   /* Layered shadows: one tight, one wide and soft. Never a single flat one. */
   --shadow-card:
-    0 1px 2px rgba(16, 16, 24, 0.10),
-    0 16px 40px -12px rgba(16, 16, 24, 0.16);
+    0 1px 2px rgba(60, 42, 22, 0.12),
+    0 16px 40px -12px rgba(60, 42, 22, 0.18);
   --shadow-panel:
-    0 2px 6px rgba(16, 16, 24, 0.12),
-    0 40px 88px -24px rgba(16, 16, 24, 0.22);
+    0 2px 6px rgba(60, 42, 22, 0.14),
+    0 40px 88px -24px rgba(60, 42, 22, 0.24);
 
-  --accent: 52 104 232;
+  /* Amber. 4.95:1 on the parchment ground — measured, not guessed. */
+  --accent: 138 82 5;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #08080b;
-  --bg-raised: #101014;
-  --text: #f2f2f5;
-  --text-dim: #8b8b93;
-  --text-faint: #5a5a63;
+  --bg: #131009;
+  --bg-raised: #1d1811;
+  --text: #f3e7d3;
+  --text-dim: #c0a883;
+  /*
+    Was #5a5a63 on near-black: 2.93:1, which is why every small label in dark
+    mode was unreadable. This is 5.49:1.
+  */
+  --text-faint: #9c8767;
 
-  --glass-fill: rgba(255, 255, 255, 0.06);
-  --glass-fill-strong: rgba(255, 255, 255, 0.09);
-  --glass-stroke: rgba(255, 255, 255, 0.12);
-  --glass-specular: rgba(255, 255, 255, 0.42);
+  --glass-fill: rgba(255, 236, 205, 0.06);
+  --glass-fill-strong: rgba(255, 238, 210, 0.10);
+  --glass-stroke: rgba(255, 226, 178, 0.15);
+  --glass-specular: rgba(255, 240, 214, 0.44);
 
   --shadow-card:
     0 1px 2px rgba(0, 0, 0, 0.55),
-    0 16px 48px -12px rgba(0, 0, 0, 0.65);
+    0 16px 48px -12px rgba(0, 0, 0, 0.68);
   --shadow-panel:
-    0 2px 4px rgba(0, 0, 0, 0.6),
-    0 40px 96px -24px rgba(0, 0, 0, 0.8);
+    0 2px 4px rgba(0, 0, 0, 0.62),
+    0 40px 96px -24px rgba(0, 0, 0, 0.82);
 
-  --accent: 122 162 255;
+  --accent: 233 166 63;
 }
 
 
@@ -99,20 +104,21 @@
   --reason-10: 156 28 113;
   --reason-11: 28 28 156;
 
-  --grade-aplus: 4 140 98;
-  --grade-a: 21 128 61;
-  --grade-bplus: 161 118 8;
-  --grade-b: 176 122 10;
-  --grade-c: 194 89 20;
-  --grade-f: 190 42 42;
+  --grade-aplus: 15 122 83;
+  --grade-a: 29 122 58;
+  --grade-bplus: 133 94 6;
+  --grade-b: 140 97 8;
+  --grade-c: 163 81 13;
+  --grade-f: 163 43 34;
 
-  --outcome-win: 21 128 61;
-  --outcome-loss: 190 42 42;
-  --outcome-neutral: 100 116 139;
-  --outcome-passed: 140 140 152;
+  --outcome-win: 29 122 58;
+  --outcome-loss: 163 43 34;
+  --outcome-neutral: 107 92 72;
+  --outcome-passed: 138 122 99;
 
-  --amber: 180 105 10;
-  --board-dots: rgba(0, 0, 0, 0.09);
+  --amber: 154 92 6;
+  /* The dots are the whiteboard's texture; at 0.09 they were invisible. */
+  --board-dots: rgba(88, 66, 38, 0.26);
   /* Cluster regions need more tint on white than they do on black to read as
      regions at all. */
   --cluster-tint: 0.16;
@@ -123,11 +129,11 @@
      reads as a bug on a light panel. */
   /* The title-bar mark. Ink stays mint in both themes; the tile behind it
      flips so the mark sits on its own ground rather than on the page. */
-  --mark-ground: #0d0d12;
-  --mark-ink: #5eead4;
-  --letterbox: rgba(0, 0, 0, 0.06);
-  --scrollbar: rgba(0, 0, 0, 0.22);
-  --scrollbar-hover: rgba(0, 0, 0, 0.34);
+  --mark-ground: #1a140c;
+  --mark-ink: #e9a63f;
+  --letterbox: rgba(88, 66, 38, 0.08);
+  --scrollbar: rgba(88, 66, 38, 0.26);
+  --scrollbar-hover: rgba(88, 66, 38, 0.4);
 }
 
 :root[data-theme='dark'] {
@@ -144,29 +150,29 @@
   --reason-10: 218 98 178;
   --reason-11: 98 98 218;
 
-  --grade-aplus: 167 243 208;
-  --grade-a: 134 239 172;
-  --grade-bplus: 253 224 71;
-  --grade-b: 252 211 77;
-  --grade-c: 251 146 60;
-  --grade-f: 248 113 113;
+  --grade-aplus: 127 224 180;
+  --grade-a: 159 224 138;
+  --grade-bplus: 240 198 90;
+  --grade-b: 234 182 70;
+  --grade-c: 238 150 69;
+  --grade-f: 240 138 122;
 
-  --outcome-win: 134 239 172;
-  --outcome-loss: 248 113 113;
-  --outcome-neutral: 148 163 184;
-  --outcome-passed: 100 100 112;
+  --outcome-win: 159 224 138;
+  --outcome-loss: 240 138 122;
+  --outcome-neutral: 168 151 124;
+  --outcome-passed: 125 110 88;
 
-  --amber: 251 191 36;
-  --board-dots: rgba(255, 255, 255, 0.06);
+  --amber: 240 180 74;
+  --board-dots: rgba(255, 224, 175, 0.16);
   --cluster-tint: 0.10;
   --cluster-tint-edge: 0.03;
   --cluster-stroke: 0.30;
   --cluster-glow: 0.35;
-  --mark-ground: #0d0d12;
-  --mark-ink: #5eead4;
+  --mark-ground: #1a140c;
+  --mark-ink: #e9a63f;
   --letterbox: rgba(0, 0, 0, 0.35);
-  --scrollbar: rgba(255, 255, 255, 0.16);
-  --scrollbar-hover: rgba(255, 255, 255, 0.26);
+  --scrollbar: rgba(255, 226, 178, 0.18);
+  --scrollbar-hover: rgba(255, 226, 178, 0.3);
 }
 
 html, body {
@@ -225,17 +231,17 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(42rem 34rem at 18% 8%,  rgba(84, 124, 255, 0.20), transparent 62%),
-    radial-gradient(38rem 30rem at 88% 22%, rgba(150, 96, 230, 0.16), transparent 62%),
-    radial-gradient(46rem 36rem at 62% 96%, rgba(48, 176, 166, 0.15), transparent 62%);
+    radial-gradient(42rem 34rem at 18% 8%,  rgba(214, 150, 48, 0.22), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(176, 106, 44, 0.18), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(140, 122, 62, 0.16), transparent 62%);
   filter: blur(28px);
 }
 
 :root[data-theme='dark'] body::before {
   background:
-    radial-gradient(42rem 34rem at 18% 8%,  rgba(94, 128, 255, 0.16), transparent 62%),
-    radial-gradient(38rem 30rem at 88% 22%, rgba(146, 92, 224, 0.13), transparent 62%),
-    radial-gradient(46rem 36rem at 62% 96%, rgba(64, 176, 168, 0.11), transparent 62%);
+    radial-gradient(42rem 34rem at 18% 8%,  rgba(232, 158, 52, 0.16), transparent 62%),
+    radial-gradient(38rem 30rem at 88% 22%, rgba(186, 104, 40, 0.13), transparent 62%),
+    radial-gradient(46rem 36rem at 62% 96%, rgba(150, 126, 58, 0.12), transparent 62%);
 }
 
 /* Scrollbars: thin, unobtrusive, and themed. The default chrome makes a glass

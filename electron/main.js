@@ -7,6 +7,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
+const http = require('node:http');
 
 const isDev = !app.isPackaged;
 const ROOT = path.join(__dirname, '..');
@@ -53,7 +54,7 @@ const APP_DIR = app.isPackaged ? path.join(process.resourcesPath, 'app') : ROOT;
 
 /** The window ground. Signature defaults to light, so the frame must too —
  *  otherwise the shell flashes black before React paints. */
-const SHELL_BG = '#ececed';
+const SHELL_BG = '#e9e2d4';
 
 let nextServer = null;
 let mainWindow = null;
@@ -73,26 +74,47 @@ function freePort() {
   });
 }
 
+/**
+ * Wait until the server actually answers a request.
+ *
+ * This used to be a bare TCP connect, which succeeds the moment the listener
+ * exists — before Next has finished wiring up its request handler. The window
+ * then loaded too early and the renderer showed a connection error instead of
+ * the app. An HTTP round trip is the only honest test of "ready".
+ */
 function waitForServer(port, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
+
   return new Promise((resolve, reject) => {
     const attempt = () => {
-      // If the server has already died there is nothing to wait for. Without
-      // this the app hangs for the full timeout and then reports a timeout,
-      // hiding the real reason (most often: a `npm run dev` server is already
-      // running against this directory, which Next refuses to duplicate).
+      // If the server already died there is nothing to wait for. Without this
+      // the app hangs for the full timeout and then reports a timeout, hiding
+      // the real reason.
       if (serverExited !== null) {
         reject(new Error(serverLog.join('').trim() || `The local server exited with code ${serverExited}.`));
         return;
       }
-      const socket = net.connect(port, '127.0.0.1');
-      socket.once('connect', () => { socket.destroy(); resolve(); });
-      socket.once('error', () => {
-        socket.destroy();
-        if (Date.now() > deadline) reject(new Error(`Next.js did not start on port ${port} within ${timeoutMs / 1000}s`));
-        else setTimeout(attempt, 150);
-      });
+
+      const req = http.get(
+        { host: '127.0.0.1', port, path: '/api/trades', timeout: 4000 },
+        (res) => {
+          res.resume();
+          if (res.statusCode && res.statusCode < 500) resolve();
+          else retry();
+        },
+      );
+      req.on('timeout', () => { req.destroy(); retry(); });
+      req.on('error', retry);
     };
+
+    const retry = () => {
+      if (Date.now() > deadline) {
+        reject(new Error(`The local server did not answer on port ${port} within ${timeoutMs / 1000}s.`));
+      } else {
+        setTimeout(attempt, 200);
+      }
+    };
+
     attempt();
   });
 }
@@ -132,8 +154,17 @@ function startNext(port) {
 
   // Keep the tail of the server's output so a startup failure can explain itself.
   const record = (d) => {
-    serverLog.push(String(d));
+    const text = String(d);
+    serverLog.push(text);
     if (serverLog.length > 40) serverLog.shift();
+    // A packaged app has no terminal. Without this, a server that dies leaves
+    // no evidence at all beyond a blank error page in the window.
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.appendFileSync(path.join(DATA_DIR, 'server.log'), text);
+    } catch {
+      /* logging must never be the thing that breaks startup */
+    }
   };
 
   nextServer.stdout.on('data', (d) => { record(d); process.stdout.write(`[next] ${d}`); });
@@ -185,7 +216,22 @@ function createWindow(port) {
     }
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  let loadAttempts = 0;
+  const load = () => mainWindow?.loadURL(`http://127.0.0.1:${port}`);
+
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    if (!isMainFrame || !mainWindow || mainWindow.isDestroyed()) return;
+    if (loadAttempts >= 5) {
+      showFailurePage(mainWindow, `${description} (${code})`);
+      return;
+    }
+    loadAttempts += 1;
+    // The server can accept a connection a moment before it serves one; give
+    // it a beat rather than leaving the window on a browser error page.
+    setTimeout(load, 400 * loadAttempts);
+  });
+
+  load();
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -195,8 +241,8 @@ function createWindow(port) {
  * left a white slab in the corner. The renderer tells us when the theme flips.
  */
 const TITLE_BAR = {
-  light: { color: '#ececed', symbolColor: '#5c5c66' },
-  dark: { color: '#08080b', symbolColor: '#8b8b93' },
+  light: { color: '#e9e2d4', symbolColor: '#54452f' },
+  dark: { color: '#131009', symbolColor: '#c0a883' },
 };
 
 ipcMain.on('signature:titlebar-theme', (_event, theme) => {
@@ -216,6 +262,31 @@ ipcMain.handle('signature:open-data-folder', async () => {
   await shell.openPath(DATA_DIR);
   return DATA_DIR;
 });
+
+/**
+ * Our own failure screen, carrying the tail of the server log.
+ *
+ * The renderer's default is Chromium's "This page couldn't load", which says
+ * nothing about why and leaves no way to find out.
+ */
+function showFailurePage(win, reason) {
+  const log = serverLog.join('').slice(-3000).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const html = `<!doctype html><meta charset="utf-8">
+<style>
+  body { margin:0; padding:48px; background:#ece7dd; color:#2b2118;
+         font:14px/1.6 -apple-system,Segoe UI,system-ui,sans-serif; }
+  h1 { font-size:19px; margin:0 0 6px; letter-spacing:-0.02em; }
+  p { margin:0 0 18px; color:#6b5a45; }
+  code { display:block; white-space:pre-wrap; background:#f6f2ea; border:1px solid #d9cfbe;
+         border-radius:12px; padding:14px; font-size:11.5px; max-height:44vh; overflow:auto; color:#4a3b2a; }
+  small { display:block; margin-top:16px; color:#8a7860; }
+</style>
+<h1>Signature could not start its local server</h1>
+<p>${reason}</p>
+<code>${log || 'The server produced no output.'}</code>
+<small>This is also written to server.log next to your journal.</small>`;
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
@@ -256,8 +327,11 @@ if (!app.requestSingleInstanceLock()) {
     try {
       await waitForServer(port);
     } catch (err) {
-      dialog.showErrorBox('Signature could not start', String(err.message));
-      app.quit();
+      // Show the window with the reason in it rather than a modal and a quit —
+      // an error you can read and copy is worth more than one you dismiss.
+      buildMenu();
+      createWindow(port);
+      if (mainWindow) showFailurePage(mainWindow, String(err.message));
       return;
     }
     buildMenu();

@@ -76,15 +76,6 @@ export function TitleBar() {
         </div>
       </nav>
 
-      <motion.div whileTap={press} transition={spring} className="ml-auto">
-        <Link
-          href="/new"
-          className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium"
-          style={{ color: 'var(--text)' }}
-        >
-          <span className="text-[13px] leading-none">+</span> New trade
-        </Link>
-      </motion.div>
     </header>
   );
 }
