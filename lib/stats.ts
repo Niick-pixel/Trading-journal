@@ -44,8 +44,10 @@ export interface Aggregate {
  * cannot quietly look like a small one.
  */
 export interface Money {
-  /** Trades that recorded both a risk and an R multiple. */
+  /** Trades with a money figure at all, recorded or derived. */
   priced: number;
+  /** Of those, how many were computed from risk x R rather than recorded. */
+  derived: number;
   won: number;
   lost: number;
   net: number;
@@ -54,19 +56,39 @@ export interface Money {
   biggestLoss: number;
 }
 
+/**
+ * What one trade did to the account, in money.
+ *
+ * A recorded figure always wins. Falling back to risk x R is an estimate
+ * multiplied by an estimate, and it is not bounded by the risk — losing 2R on
+ * $2.50 really is a $5 loss, which reads like the app inflating the number
+ * when it is actually saying "you lost twice what you meant to". True, useful,
+ * and still not a substitute for the number on the statement.
+ */
+export function pnlOf(t: Trade): number | null {
+  if (t.pnl_dollars != null) return t.pnl_dollars;
+  if (t.risk_dollars == null || t.r_multiple == null) return null;
+  return t.risk_dollars * t.r_multiple;
+}
+
 export function money(trades: Trade[]): Money {
   let won = 0;
   let lost = 0;
   let totalRisked = 0;
   let priced = 0;
+  let derived = 0;
   let biggestWin = 0;
   let biggestLoss = 0;
 
   for (const t of trades) {
-    if (!isTaken(t.outcome) || t.risk_dollars == null || t.r_multiple == null) continue;
+    if (!isTaken(t.outcome)) continue;
+    const pnl = pnlOf(t);
+    if (pnl == null) continue;
+
     priced += 1;
-    totalRisked += t.risk_dollars;
-    const pnl = t.risk_dollars * t.r_multiple;
+    if (t.pnl_dollars == null) derived += 1;
+    totalRisked += t.risk_dollars ?? 0;
+
     if (pnl >= 0) {
       won += pnl;
       biggestWin = Math.max(biggestWin, pnl);
@@ -76,7 +98,7 @@ export function money(trades: Trade[]): Money {
     }
   }
 
-  return { priced, won, lost, net: won - lost, totalRisked, biggestWin, biggestLoss };
+  return { priced, derived, won, lost, net: won - lost, totalRisked, biggestWin, biggestLoss };
 }
 
 export interface Edge {

@@ -103,6 +103,8 @@ export interface Trade {
   /** Never negative — P&L is risk x R, so a negative risk inverts every outcome. */
   risk_dollars: number | null;
   risk_percent: number | null;
+  /** What the account actually did. Beats risk x R wherever it is set. */
+  pnl_dollars: number | null;
   stop_points: number | null;
   outcome: Outcome;
   r_multiple: number | null;

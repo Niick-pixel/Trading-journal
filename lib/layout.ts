@@ -194,13 +194,19 @@ export function computeLayout(trades: Trade[], scale = 1, mode: GroupMode = 'rea
       const jitterX = (seeded(trade.id, 1) - 0.5) * 26;
       const jitterY = (seeded(trade.id, 2) - 0.5) * 22;
 
+      /*
+        A pinned position only means anything in the default grouping.
+        "Where I put this card" is a fact about my board, and my board is
+        organised by reason. Honouring it under every other grouping left the
+        cards where reason had put them, so the setup clusters were computed
+        around scattered nodes and drew straight through each other.
+      */
+      const pinned = mode === 'reason';
       placed.push({
         trade,
         reason: trade.reason,
-        // A stored position always wins: once a trade has been drawn it keeps
-        // its spot, so adding a later trade never rearranges the board.
-        x: trade.position_x ?? cursorX + PAD + col * (nodeW + GAP_X) + jitterX,
-        y: trade.position_y ?? cursorY + HEADER_H + row * (nodeH + GAP_Y) + jitterY,
+        x: (pinned ? trade.position_x : null) ?? cursorX + PAD + col * (nodeW + GAP_X) + jitterX,
+        y: (pinned ? trade.position_y : null) ?? cursorY + HEADER_H + row * (nodeH + GAP_Y) + jitterY,
       });
 
       if (i > 0) reasonEdges.push([ordered[i - 1].id, trade.id]);

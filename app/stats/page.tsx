@@ -270,8 +270,10 @@ export default async function StatsPage(
                 </Panel>
 
                 <Panel title="Money" note={m.priced < agg.taken
-                  ? `${m.priced} of ${agg.taken} taken trades recorded a risk amount — the rest are excluded here.`
-                  : 'Risk in dollars against R returned.'}>
+                  ? `${m.priced} of ${agg.taken} taken trades have a money figure — the rest are excluded here.`
+                  : m.derived > 0
+                    ? `${m.derived} of ${m.priced} are estimated as risk x R rather than recorded, so they are not bounded by the risk — a −2R loss on $200 is −$400.`
+                    : 'Recorded from the account, not estimated.'}>
                   <Line label="Gross won" value={usd(m.won)} tone="win" />
                   <Line label="Gross lost" value={usd(m.lost)} tone="loss" />
                   <Line label="Net" value={usd(m.net)} tone={m.net >= 0 ? 'win' : 'loss'} />
@@ -279,7 +281,9 @@ export default async function StatsPage(
                   <Line label="Biggest win" value={usd(m.biggestWin)} tone="win" />
                   <Line label="Biggest loss" value={usd(-m.biggestLoss)} tone="loss" />
                   <Line label="Return on risk"
-                    value={m.totalRisked ? `${((m.net / m.totalRisked) * 100).toFixed(1)}%` : '—'}
+                    value={m.totalRisked
+                      ? `${m.net < 0 ? '−' : ''}${Math.abs((m.net / m.totalRisked) * 100).toFixed(1)}%`
+                      : '—'}
                     tone={m.net >= 0 ? 'win' : 'loss'} />
                 </Panel>
 

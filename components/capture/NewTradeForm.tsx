@@ -69,6 +69,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
   const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
   const [riskPercent, setRiskPercent] = useState(trade?.risk_percent?.toString() ?? '');
+  const [pnlDollars, setPnlDollars] = useState(trade?.pnl_dollars?.toString() ?? '');
   const [entryTime, setEntryTime] = useState(trade?.entry_time ?? '');
   const [exitTime, setExitTime] = useState(trade?.exit_time ?? '');
   const [maeR, setMaeR] = useState(trade?.mae_r?.toString() ?? '');
@@ -460,7 +461,16 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
                 <Input type="number" step="0.01" min="0" inputMode="decimal" placeholder="—"
                   value={riskPercent} onChange={(e) => setRiskPercent(e.target.value)} />
               </Field>
-              <Field label="Stop (points)" hint="Optional — it is on the screenshot." className="sm:col-span-2">
+              {/*
+                The actual figure, which beats risk x R everywhere it is set.
+                Deriving it multiplies one estimate by another, and it is not
+                bounded by the risk: a -2R loss on $200 really is -$400.
+              */}
+              <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
+                <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+                  value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
+              </Field>
+              <Field label="Stop (points)" hint="Optional — it is on the screenshot.">
                 <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
               </Field>
             </div>

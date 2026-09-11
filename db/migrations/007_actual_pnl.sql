@@ -1,0 +1,11 @@
+-- Record the money instead of deriving it.
+--
+-- The Money panel computed P&L as risk_dollars x r_multiple, which is an
+-- estimate multiplied by an estimate. It is also unbounded by the risk: a
+-- -2.0R loss on $2.50 risked is a $5 loss, which looks like the app inflating
+-- the number when really it is saying "you lost twice what you meant to".
+--
+-- That is sometimes true and worth seeing. But when the actual figure is known
+-- it should be the one used, so the panel reports what the account did rather
+-- than what the arithmetic implies.
+ALTER TABLE trades ADD COLUMN pnl_dollars REAL;

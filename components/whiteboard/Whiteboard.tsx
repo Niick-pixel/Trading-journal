@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { usePreferences } from '@/components/shell/PreferencesProvider';
 import { DENSITY_SCALE } from '@/lib/preferences';
 import { BoardControls } from './BoardControls';
+import { BoardTitle } from './BoardTitle';
 import { ClusterNode } from './ClusterNode';
 import { DetailPanel } from './DetailPanel';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
@@ -24,7 +25,7 @@ import { RiskBanner } from './RiskBanner';
 import { StickyNotes } from './StickyNotes';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
-const nodeTypes = { trade: TradeNode, cluster: ClusterNode };
+const nodeTypes = { trade: TradeNode, cluster: ClusterNode, title: BoardTitle };
 
 function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[]; readOnly?: boolean }) {
   const [trades, setTrades] = useState(initial);
@@ -114,6 +115,27 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
   }, []);
 
   const nodes = useMemo<Node[]>(() => {
+    /*
+      The root. Centred over the clusters and placed above the highest one, so
+      it reads as the thing they all hang from rather than as another card.
+    */
+    const spanLeft = Math.min(...layout.clusters.map((c) => c.x), 0);
+    const spanRight = Math.max(...layout.clusters.map((c) => c.x + c.width), 0);
+    const topY = Math.min(...layout.clusters.map((c) => c.y), 0);
+
+    const titleNode: Node[] = layout.clusters.length === 0 ? [] : [{
+      id: 'board-title',
+      type: 'title',
+      position: { x: (spanLeft + spanRight) / 2 - 150, y: topY - 200 },
+      data: {
+        label: GROUP_LABELS[groupMode],
+        sub: `${layout.clusters.length} group${layout.clusters.length === 1 ? '' : 's'} · ${visible.length} trade${visible.length === 1 ? '' : 's'}`,
+      },
+      draggable: false,
+      selectable: false,
+      zIndex: 1,
+    }];
+
     const clusterNodes: Node[] = layout.clusters.map((cluster, index) => ({
       id: `cluster-${cluster.key}`,
       type: 'cluster',
@@ -143,8 +165,8 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
       style: { width: NODE_W * scale, height: NODE_H * scale },
     }));
 
-    return [...clusterNodes, ...tradeNodes];
-  }, [layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds]);
+    return [...titleNode, ...clusterNodes, ...tradeNodes];
+  }, [layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds, groupMode, visible.length]);
 
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
@@ -197,15 +219,39 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         style: { stroke: 'rgb(var(--accent) / 0.75)', strokeWidth: 2 },
       }));
 
+    /*
+      The branches. One line from the board title to each group, in that
+      group's own hue, so the whole board reads as one tree instead of a field
+      of unexplained islands.
+    */
+    const branches: Edge[] = layout.clusters.map((cluster) => ({
+      id: `branch-${cluster.key}`,
+      source: 'board-title',
+      target: `cluster-${cluster.key}`,
+      type: 'default',
+      // Thicker than the derived edges: this is the board's skeleton, and it
+      // has to read at the zoom where the whole board fits on screen.
+      style: { stroke: `rgb(${cluster.accent} / 0.7)`, strokeWidth: 2.5 },
+      zIndex: 0,
+    }));
+
     return [
+      ...branches,
       ...(prefs.showReasonEdges ? within : []),
       ...(prefs.showLeakEdges ? leaks : []),
       ...manual,
     ];
   }, [layout, prefs.showReasonEdges, prefs.showLeakEdges, board.edges, visible]);
 
-  // Persist a drag so a manual arrangement survives a reload.
+  /*
+    Persist a drag so a manual arrangement survives a reload — but only in the
+    default grouping. A position is "where I put this card on my board", and my
+    board is organised by reason; saving a drag made while grouped by setup
+    would silently rewrite that arrangement from a view that was never meant to
+    be permanent.
+  */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
+    if (groupMode !== 'reason') return;
     for (const change of changes) {
       if (change.type !== 'position' || change.dragging !== false || !change.position) continue;
       const { id, position } = change;
@@ -217,7 +263,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         body: JSON.stringify({ x: position.x, y: position.y }),
       });
     }
-  }, []);
+  }, [groupMode]);
 
   /**
    * Pin anything the layout just placed for the first time.

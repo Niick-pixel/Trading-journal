@@ -58,7 +58,7 @@ function TradeNodeInner({ data }: NodeProps) {
       {flagged && (
         <span
           title="This record contradicts itself — open it to see how"
-          className="absolute left-2 top-2 z-[4] size-2 rounded-full"
+          className="absolute left-2 top-[38px] z-[4] size-2 rounded-full"
           style={{
             background: 'rgb(var(--amber))',
             boxShadow: '0 0 8px rgb(var(--amber) / 0.9)',
@@ -71,31 +71,32 @@ function TradeNodeInner({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
 
       {/*
-        The only place the card can be dragged from.
-        With the whole card draggable, opening a trade and nudging it out of its
-        cluster were the same gesture, and the board drifted just from being
-        read. Clicking anywhere still opens the detail panel; moving it takes a
-        deliberate grab here.
+        The grab bar.
+        This was a 24px button that only appeared on hover, which made moving a
+        card a game of hunt-the-pixel. It is now a full-width strip along the
+        top of every card, always visible: a card is dragged by its edge, the
+        way a window is dragged by its title bar. Clicking anywhere else still
+        opens the trade, which is what stops the board drifting just from being
+        read.
       */}
       <div
-        className="signature-drag-handle absolute left-1.5 top-1.5 z-10 grid size-6 cursor-grab
-          place-items-center rounded-[8px] opacity-0 transition-opacity active:cursor-grabbing
-          group-hover:opacity-100"
+        className="signature-drag-handle absolute inset-x-0 top-0 z-[6] flex h-7 cursor-grab
+          items-center gap-1.5 px-2 active:cursor-grabbing"
         title="Drag to move"
         onClick={(event) => event.stopPropagation()}
         style={{
-          background: 'rgba(10,10,12,0.55)',
-          backdropFilter: 'blur(6px)',
-          border: '1px solid rgba(255,255,255,0.16)',
+          background: 'linear-gradient(to bottom, rgba(10,10,12,0.62), rgba(10,10,12,0))',
         }}
       >
-        <svg width="9" height="11" viewBox="0 0 9 11" fill="none" aria-hidden>
-          <g fill="rgba(255,255,255,0.75)">
-            <circle cx="2" cy="1.6" r="1" /><circle cx="7" cy="1.6" r="1" />
-            <circle cx="2" cy="5.5" r="1" /><circle cx="7" cy="5.5" r="1" />
-            <circle cx="2" cy="9.4" r="1" /><circle cx="7" cy="9.4" r="1" />
+        <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden>
+          <g fill="rgba(255,255,255,0.55)">
+            <circle cx="1.4" cy="1.4" r="1" /><circle cx="5.5" cy="1.4" r="1" /><circle cx="9.6" cy="1.4" r="1" />
+            <circle cx="1.4" cy="5.5" r="1" /><circle cx="5.5" cy="5.5" r="1" /><circle cx="9.6" cy="5.5" r="1" />
           </g>
         </svg>
+        <span className="truncate text-[9px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
+          {new Date(trade.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+        </span>
       </div>
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -114,7 +115,7 @@ function TradeNodeInner({ data }: NodeProps) {
         style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.12) 46%, rgba(0,0,0,0.34) 100%)' }} />
 
       <div
-        className="absolute right-2 top-2 grid size-7 place-items-center rounded-[9px] text-[11px] font-semibold leading-none"
+        className="absolute right-2 top-9 grid size-7 place-items-center rounded-[9px] text-[11px] font-semibold leading-none"
         style={{
           color: `rgb(${grade})`,
           background: 'rgba(10,10,12,0.6)',
@@ -130,7 +131,7 @@ function TradeNodeInner({ data }: NodeProps) {
           the board is for, and it should be readable without opening anything. */}
       {trade.mistake_tags.length > 0 && (
         <span
-          className="absolute left-2 top-8 max-w-[85%] truncate rounded-full px-2 py-0.5 text-[9px] font-medium"
+          className="absolute left-2 top-[52px] max-w-[85%] truncate rounded-full px-2 py-0.5 text-[9px] font-medium"
           style={{
             color: 'rgb(var(--outcome-loss))',
             background: 'rgba(10,10,12,0.62)',

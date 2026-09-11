@@ -130,6 +130,8 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       // the P&L, so it is dropped rather than stored.
       risk_dollars: positiveOrNull('risk_dollars'),
       risk_percent: positiveOrNull('risk_percent'),
+      // Signed, unlike risk: a loss is a negative number here.
+      pnl_dollars: numOrNull('pnl_dollars'),
       stop_points: numOrNull('stop_points'),
       outcome: outcome!,
       r_multiple: numOrNull('r_multiple'),

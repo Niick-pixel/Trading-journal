@@ -1,6 +1,7 @@
 'use client';
 
 import { memo } from 'react';
+import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { motion } from 'framer-motion';
 import { gradeLetter } from '@/lib/grade';

@@ -98,7 +98,7 @@ const WRITABLE = [
   'would_have_hit_tp', 'r_left_on_table', 'skip_reason',
   'entry_time', 'exit_time', 'mae_r', 'mfe_r', 'mae_points', 'mfe_points', 'reached_1r',
   'confidence_at_entry', 'would_be_r', 'playbook_id',
-  'contracts', 'risk_dollars', 'risk_percent', 'stop_points', 'outcome', 'r_multiple',
+  'contracts', 'risk_dollars', 'risk_percent', 'pnl_dollars', 'stop_points', 'outcome', 'r_multiple',
   'explanation', 'lesson', 'screenshot_path',
 ] as const;
 

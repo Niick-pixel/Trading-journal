@@ -1,0 +1,56 @@
+'use client';
+
+import { memo } from 'react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { motion } from 'framer-motion';
+import { springBouncy } from '@/lib/motion';
+
+export type BoardTitleData = {
+  label: string;
+  sub: string;
+};
+
+/**
+ * The root of the board, at top centre, with a line down to every cluster.
+ *
+ * The clusters already carried their own names, but nothing said what they
+ * were names *of* — grouped by setup, "iFVG" and "Turtle Soup" sat on the
+ * canvas as unexplained islands. A root that says "Setup" and visibly branches
+ * into them turns the board into one object instead of several.
+ */
+function BoardTitleInner({ data }: NodeProps) {
+  const { label, sub } = data as unknown as BoardTitleData;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={springBouncy}
+      className="glass rounded-[26px] px-10 py-6 text-center"
+      style={{
+        borderColor: 'rgb(var(--accent) / 0.4)',
+        boxShadow: 'var(--shadow-panel), 0 0 50px -14px rgb(var(--accent) / 0.5)',
+      }}
+    >
+      <div
+        className="text-[10px] uppercase tracking-[0.14em]"
+        style={{ color: 'var(--text-faint)' }}
+      >
+        Grouped by
+      </div>
+      <div
+        className="mt-1.5 text-[30px] font-semibold leading-none tracking-tight"
+        style={{ color: 'rgb(var(--accent))' }}
+      >
+        {label}
+      </div>
+      <div className="mt-1.5 text-[11px]" style={{ color: 'var(--text-dim)' }}>
+        {sub}
+      </div>
+
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
+    </motion.div>
+  );
+}
+
+export const BoardTitle = memo(BoardTitleInner);
