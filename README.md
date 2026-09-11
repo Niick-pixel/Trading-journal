@@ -88,6 +88,21 @@ so the whole thing travels on a USB stick if you want it to.
 > Windows SmartScreen will warn the first time, because the executable isn't
 > code-signed (that needs a paid certificate). *More info → Run anyway.*
 
+It shows a splash while it starts, because a portable executable is really a
+self-extracting archive: the first thing it does is unpack ~450 MB into a temp
+folder, which takes a few seconds during which Windows shows nothing at all.
+
+**`portable.unpackDirName` is set to `true` on purpose, and it matters.** Left
+unset, electron-builder bakes one fixed folder name into the executable and
+every launch extracts into *that same folder* — after running `RMDir /r` on it
+first. Close the app and reopen it, or double-click twice because nothing
+seemed to happen, and the second launch deletes the files the first one is
+still running from. Turbopack loads its chunks lazily, per route, so the app
+starts, migrations run, and then every screen you open dies on a chunk that no
+longer exists. Setting it to `true` gives each launch its own extraction
+directory, which is the only thing that actually prevents this. (`false` does
+not do what it sounds like — electron-builder treats it the same as unset.)
+
 To build one yourself on a Windows machine: `npm run desktop:build`.
 
 ## Where your data lives

@@ -48,7 +48,9 @@
     },
     "portable": {
       "artifactName": "Signature-portable-${version}.exe",
-      "unicode": true
+      "unicode": true,
+      "unpackDirName": true,
+      "splashImage": "assets/splash.bmp"
     },
     "files": [
       "electron/**/*",
