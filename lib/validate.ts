@@ -35,6 +35,9 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
+  const clamp = (n: number | null, lo: number, hi: number): number | null =>
+    n == null ? null : Math.min(hi, Math.max(lo, Math.round(n)));
+
   /** Risk is a magnitude. A negative one silently turns every loss into a win. */
   const positiveOrNull = (field: string): number | null => {
     const n = numOrNull(field);
@@ -108,6 +111,19 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       would_have_hit_tp: t.would_have_hit_tp == null ? null : t.would_have_hit_tp === true,
       r_left_on_table: numOrNull('r_left_on_table'),
       skip_reason: oneOf('skip_reason', SKIP_REASONS),
+      entry_time: typeof t.entry_time === 'string' && t.entry_time ? t.entry_time : null,
+      exit_time: typeof t.exit_time === 'string' && t.exit_time ? t.exit_time : null,
+      mae_r: numOrNull('mae_r'),
+      mfe_r: numOrNull('mfe_r'),
+      mae_points: numOrNull('mae_points'),
+      mfe_points: numOrNull('mfe_points'),
+      reached_1r: t.reached_1r == null ? null : t.reached_1r === true,
+      // Only meaningful before the outcome was known, so it is clamped rather
+      // than rejected — an out-of-range value is a bug, not a reason to refuse
+      // to save the trade it belongs to.
+      confidence_at_entry: clamp(numOrNull('confidence_at_entry'), 1, 5),
+      would_be_r: numOrNull('would_be_r'),
+      playbook_id: typeof t.playbook_id === 'string' && t.playbook_id ? t.playbook_id : null,
       contracts: numOrNull('contracts'),
       // Clamped, not rejected — nothing here is allowed to refuse a save. A
       // negative risk is a typo for a percentage, and keeping it would invert

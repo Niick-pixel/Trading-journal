@@ -1,12 +1,18 @@
 import { listTrades } from '@/db/trades';
-import { ACCOUNTS, INSTRUMENTS, REASON_HUE, SESSIONS, SETUP_TYPES, type Account } from '@/lib/domain';
+import {
+  ACCOUNTS, INSTRUMENTS, MIN_SAMPLE, REASON_HUE, SESSIONS, SETUP_TYPES, type Account,
+} from '@/lib/domain';
 import { GRADE_COLOR } from '@/lib/grade';
 import { reasonAccent } from '@/lib/layout';
 import {
   accountsInUse, aggregate, byGradeBucket, byMacroTime, checklistEdge, discipline, edge,
-  forAccount, gradeHonesty, groupByField, hesitation, losingReasons, money, preGradedOnly,
-  rByReason, rByTargetType,
+  byConfidence, byGradeBand, equityCurves, excursion, forAccount, gradeHonesty, groupByField,
+  hesitation, losingReasons, money, passedSetups, preGradedOnly, rByMistakeTag, rByReason,
+  rByTargetType, rHistogram, streaks, whenHeatmap,
 } from '@/lib/stats';
+import { EquityChart } from '@/components/stats/EquityChart';
+import { Histogram } from '@/components/stats/Histogram';
+import { WhenHeatmap } from '@/components/stats/WhenHeatmap';
 import { AccountSwitcher } from '@/components/stats/AccountSwitcher';
 import { Line, Panel, RateBars, SignedBars, Stat, type BarRow } from '@/components/stats/Bars';
 import { TitleBar } from '@/components/shell/TitleBar';
@@ -54,6 +60,15 @@ export default async function StatsPage(
   const d = discipline(trades);
   const honesty = gradeHonesty(trades);
   const hes = hesitation(trades);
+  const curves = equityCurves(trades);
+  const bands = byGradeBand(trades);
+  const conf = byConfidence(trades);
+  const run = streaks(trades);
+  const exc = excursion(trades);
+  const passed = passedSetups(trades);
+  const tagRows: BarRow[] = rByMistakeTag(trades).map((t) => ({
+    label: t.tag, value: t.totalR, display: r(t.totalR), meta: `· ${t.count}`,
+  }));
 
   const reasonRows: BarRow[] = rByReason(trades).map((g) => ({
     label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
@@ -202,6 +217,18 @@ export default async function StatsPage(
                     <Line label="Broke a rule" value={`${d.broken.count} · ${r(d.broken.totalR)}`} tone="loss" />
                   </div>
                 </div>
+              </Panel>
+
+              {/*
+                The single most useful picture here. Two lines on one axis is
+                an argument, not a report: if the rule-following curve climbs
+                while the other sinks, the plan is the edge.
+              */}
+              <Panel
+                title="Following the rules vs breaking them"
+                note="Cumulative R, in the order the trades happened, split by what the checklist says about each one."
+              >
+                <EquityChart followed={curves.followed} broken={curves.broken} />
               </Panel>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -448,6 +475,134 @@ export default async function StatsPage(
                       Not enough trades yet — each box needs trades on both sides of it to be compared.
                     </p>
                   )}
+                </Panel>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Panel
+                  title="Win rate by grade band"
+                  note="Does the checklist predict anything? If these do not climb, it does not — and n is on every row because four trades can show any number at all."
+                >
+                  <div className="space-y-1">
+                    {bands.map((b) => (
+                      <div key={b.label} className="flex items-baseline justify-between gap-3 py-1">
+                        <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>{b.label}</span>
+                        <span className="flex items-baseline gap-3">
+                          <span className="tabular-nums text-[12px] font-semibold">{pct(b.winRate)}</span>
+                          <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                            {r2(b.expectancy)}
+                          </span>
+                          <span
+                            className="tabular-nums text-[11px]"
+                            style={{ color: b.thin ? 'rgb(var(--amber))' : 'var(--text-faint)' }}
+                          >
+                            n {b.taken}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {bands.some((b) => b.thin) && (
+                    <p className="mt-3 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
+                      Bands marked in amber have fewer than {MIN_SAMPLE} taken trades. Those numbers
+                      are noise — do not change anything because of them.
+                    </p>
+                  )}
+                </Panel>
+
+                <Panel title="R distribution" note="The shape the averages hide. One outlier carrying fifty small losses reads the same as a grind until you look.">
+                  <Histogram bins={rHistogram(trades)} />
+                </Panel>
+
+                <Panel title="Streaks" note="Journaling streak, not winning streak — the first is the one you control.">
+                  <Line label="Days journalled in a row" value={String(run.journalingCurrent)} tone={run.journalingCurrent > 0 ? 'win' : null} />
+                  <Line label="Best run of journalled days" value={String(run.journalingBest)} />
+                  <Line label="Clean days in a row" value={String(run.adherenceCurrent)} tone={run.adherenceCurrent > 0 ? 'win' : null} />
+                  <Line label="Best run of clean days" value={String(run.adherenceBest)} />
+                  <Line label="Longest win streak" value={String(e.longestWinStreak)} tone="win" />
+                  <Line label="Longest loss streak" value={String(e.longestLossStreak)} tone="loss" />
+                </Panel>
+
+                <Panel
+                  title="Hesitation against discipline"
+                  note="R left behind on setups that met the standard, against R saved by passing on ones that did not. If the first is bigger than your losses, entries are not the problem."
+                >
+                  <Line
+                    label="Cost of hesitation"
+                    value={passed.hesitationCount ? `−${Math.abs(passed.hesitationCostR).toFixed(1)}R` : '—'}
+                    tone={passed.hesitationCostR ? 'loss' : null}
+                  />
+                  <Line label="Setups passed that met the standard" value={String(passed.hesitationCount)} />
+                  <Line
+                    label="Value of discipline"
+                    value={passed.disciplineCount ? `+${Math.abs(passed.disciplineValueR).toFixed(1)}R` : '—'}
+                    tone={passed.disciplineValueR ? 'win' : null}
+                  />
+                  <Line label="Setups correctly passed" value={String(passed.disciplineCount)} tone="win" />
+                </Panel>
+
+                <Panel
+                  title="How far it moved against you"
+                  note="Excursion. If most losers touched +1R first, the problem is management rather than selection — and no win rate will ever tell you that."
+                >
+                  {exc.n === 0 ? (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      No MAE or MFE recorded yet. Both are optional fields on the trade form.
+                    </p>
+                  ) : (
+                    <>
+                      <Line label="Avg MAE on winners" value={r2(exc.avgMaeWinners)} />
+                      <Line label="Avg MAE on losers" value={r2(exc.avgMaeLosers)} tone="loss" />
+                      <Line label="Avg MFE on winners" value={r2(exc.avgMfeWinners)} tone="win" />
+                      <Line label="Avg MFE on losers" value={r2(exc.avgMfeLosers)} />
+                      <Line
+                        label="Losers that reached +1R first"
+                        value={exc.losersWithData ? `${exc.losersThatReached1R} of ${exc.losersWithData}` : '—'}
+                        tone={exc.losersThatReached1R > exc.losersWithData / 2 ? 'loss' : null}
+                      />
+                      {exc.losersWithData > 0 && exc.losersThatReached1R > exc.losersWithData / 2 && (
+                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
+                          More than half your losers were up a full R before they stopped you out. That is
+                          a management problem, not a selection one.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </Panel>
+
+                <Panel title="R by mistake" note="Every tag on every trade, worst first. A tag on a winner still counts.">
+                  {tagRows.length ? <SignedBars rows={tagRows} /> : (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Nothing tagged yet.</p>
+                  )}
+                </Panel>
+
+                <Panel
+                  title="Calibration"
+                  note="Win rate by the confidence you claimed before you knew. If the 5s do not beat the 2s, the read is noise and size stays flat until it isn't."
+                >
+                  {conf.length === 0 ? (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      No confidence recorded yet. It only means anything if it is set before the outcome.
+                    </p>
+                  ) : (
+                    conf.map((c) => (
+                      <div key={c.label} className="flex items-baseline justify-between gap-3 py-1">
+                        <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>
+                          {'★'.repeat(Number(c.label))}
+                        </span>
+                        <span className="flex items-baseline gap-3">
+                          <span className="tabular-nums text-[12px] font-semibold">{pct(c.winRate)}</span>
+                          <span className="tabular-nums text-[11px]" style={{ color: c.thin ? 'rgb(var(--amber))' : 'var(--text-faint)' }}>
+                            n {c.taken}
+                          </span>
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </Panel>
+
+                <Panel title="When you trade" note="Entry hour against weekday.">
+                  <WhenHeatmap cells={whenHeatmap(trades)} />
                 </Panel>
               </div>
 

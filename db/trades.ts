@@ -38,7 +38,7 @@ const GENERATED_BOOL_COLUMNS = ['trigger_fired'] as const;
  * collapsing that null to 0 would quietly turn "I never checked" into "no" —
  * which is exactly the number the hesitation-cost panel reads.
  */
-const NULLABLE_BOOL_COLUMNS = ['would_have_hit_tp', 'followed_rules'] as const;
+const NULLABLE_BOOL_COLUMNS = ['would_have_hit_tp', 'followed_rules', 'reached_1r'] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
   const trade = { ...row } as unknown as Trade;
@@ -96,6 +96,8 @@ const WRITABLE = [
   'account', 'account_label', 'status', 'grade_at_entry', 'graded_post_hoc',
   'entry_price', 'take_profit', 'stop_loss',
   'would_have_hit_tp', 'r_left_on_table', 'skip_reason',
+  'entry_time', 'exit_time', 'mae_r', 'mfe_r', 'mae_points', 'mfe_points', 'reached_1r',
+  'confidence_at_entry', 'would_be_r', 'playbook_id',
   'contracts', 'risk_dollars', 'risk_percent', 'stop_points', 'outcome', 'r_multiple',
   'explanation', 'lesson', 'screenshot_path',
 ] as const;

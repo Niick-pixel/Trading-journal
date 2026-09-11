@@ -260,3 +260,28 @@ export const REASON_HUE: Record<Reason, number> = {
   Overleveraged: 320,
   'News reaction': 240,
 };
+
+
+/**
+ * Screenshot slots, in the order a trade is actually read.
+ *
+ * One image is not a trade: the HTF frame is why you were looking, the entry
+ * is what you acted on, and the result is what the market did with it. Only
+ * the first is required, so logging stays a ten-second job.
+ */
+export const SHOT_SLOTS = ['HTF context', 'Entry', 'Result', 'Other'] as const;
+export type ShotSlot = (typeof SHOT_SLOTS)[number];
+
+/** Score bands for the question "is my grading predictive?". */
+export const GRADE_BANDS = [
+  { label: '0–49', min: 0, max: 49 },
+  { label: '50–69', min: 50, max: 69 },
+  { label: '70–84', min: 70, max: 84 },
+  { label: '85–100', min: 85, max: 100 },
+] as const;
+
+/** Below this, a bucket is noise and the app says so rather than drawing a conclusion. */
+export const MIN_SAMPLE = 20;
+
+/** Recorded before the outcome is known, or it measures nothing. */
+export const CONFIDENCE_LEVELS = [1, 2, 3, 4, 5] as const;

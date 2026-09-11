@@ -1,6 +1,8 @@
 import {
-  ACCOUNTS, CHECKLIST_ITEMS, REASONS, SKIP_REASONS, TARGET_TYPES, isTaken,
-  type Account, type ChecklistKey, type Reason, type SkipReason, type TargetType,
+  ACCOUNTS, CHECKLIST_ITEMS, CONFIDENCE_LEVELS, GRADE_BANDS, MIN_SAMPLE, REASONS,
+  SKIP_REASONS, TAKE_IT_THRESHOLD, TARGET_TYPES, isTaken,
+  type Account, type ChecklistKey, type MistakeTag, type Reason, type SkipReason,
+  type TargetType,
 } from './domain';
 import { adherenceGap, derivedAdherence, type AdherenceGap } from './adherence';
 import { GRADE_BUCKETS } from './grade';
@@ -455,11 +457,18 @@ export function forAccount(trades: Trade[], account: Account | 'All'): Trade[] {
   return account === 'All' ? trades : trades.filter((t) => t.account === account);
 }
 
-/** Accounts that actually have trades in them, with counts. */
+/**
+ * Accounts that actually have trades in them, busiest first.
+ *
+ * Ordered by count rather than by the enum, because the first one is what the
+ * Stats page opens on — and opening on a demo account with eleven trades while
+ * the live one has thirty-five is the wrong first thing to see.
+ */
 export function accountsInUse(trades: Trade[]): Array<{ account: Account; count: number }> {
   return ACCOUNTS
     .map((account) => ({ account, count: trades.filter((t) => t.account === account).length }))
-    .filter((a) => a.count > 0);
+    .filter((a) => a.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 /**
@@ -469,4 +478,261 @@ export function accountsInUse(trades: Trade[]): Array<{ account: Account; count:
  */
 export function preGradedOnly(trades: Trade[]): Trade[] {
   return trades.filter((t) => !t.graded_post_hoc);
+}
+
+/* ------------------------------------------------------------------ *
+ * Stats that are supposed to change what I do next.
+ * ------------------------------------------------------------------ */
+
+export interface CurvePoint { i: number; date: string; r: number; cumulative: number }
+
+/**
+ * Two equity curves from the same trades: the ones where the checklist says
+ * the rules were followed, and the ones where it says they weren't.
+ *
+ * This is the single most useful picture in the app. One line is a P&L chart,
+ * which tells you what happened. Two lines on the same axis is an argument:
+ * if the rule-following curve rises and the rule-breaking one falls, the plan
+ * is the edge and nothing else needs saying. If they are the same shape, the
+ * plan is not doing the work I think it is.
+ */
+export interface EquityCurves {
+  followed: CurvePoint[];
+  broken: CurvePoint[];
+  /** Every taken trade in order, for the combined line. */
+  all: CurvePoint[];
+}
+
+function curve(trades: Trade[]): CurvePoint[] {
+  let cumulative = 0;
+  return trades
+    .filter((t) => isTaken(t.outcome) && t.r_multiple != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((t, i) => {
+      cumulative += t.r_multiple as number;
+      return { i, date: t.date, r: t.r_multiple as number, cumulative };
+    });
+}
+
+export function equityCurves(trades: Trade[]): EquityCurves {
+  return {
+    followed: curve(trades.filter((t) => derivedAdherence(t))),
+    broken: curve(trades.filter((t) => !derivedAdherence(t))),
+    all: curve(trades),
+  };
+}
+
+/** R outcomes bucketed, so the shape of the distribution is visible. */
+export interface HistogramBin { label: string; from: number; to: number; count: number }
+
+export function rHistogram(trades: Trade[]): HistogramBin[] {
+  const edges = [-Infinity, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, Infinity];
+  const bins: HistogramBin[] = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const from = edges[i];
+    const to = edges[i + 1];
+    const label = from === -Infinity ? '< −2R' : to === Infinity ? '3R +'
+      : `${from > 0 ? '+' : ''}${from} to ${to > 0 ? '+' : ''}${to}`;
+    bins.push({ label, from, to, count: 0 });
+  }
+  for (const t of trades) {
+    if (!isTaken(t.outcome) || t.r_multiple == null) continue;
+    const r = t.r_multiple;
+    const bin = bins.find((b) => r >= b.from && r < b.to);
+    if (bin) bin.count += 1;
+  }
+  return bins.filter((b) => b.count > 0);
+}
+
+/**
+ * The grade bands, with the sample size attached to every one.
+ *
+ * The `n` is not decoration. Four trades in a bucket can show any win rate at
+ * all, and a chart that does not say so invites exactly the wrong conclusion.
+ */
+export interface BandRow {
+  label: string;
+  count: number;
+  taken: number;
+  winRate: number | null;
+  totalR: number;
+  expectancy: number | null;
+  /** True when there are too few trades to read anything into it. */
+  thin: boolean;
+}
+
+export function byGradeBand(trades: Trade[]): BandRow[] {
+  return GRADE_BANDS.map((band) => {
+    const ts = trades.filter((t) => t.checklist_score >= band.min && t.checklist_score <= band.max);
+    const stats = aggregate(ts);
+    const e = edge(ts);
+    return {
+      label: band.label,
+      count: stats.count,
+      taken: stats.taken,
+      winRate: stats.winRate,
+      totalR: stats.totalR,
+      expectancy: e.expectancy,
+      thin: stats.taken < MIN_SAMPLE,
+    };
+  }).filter((b) => b.count > 0);
+}
+
+/** Win rate by the confidence I claimed before I knew. */
+export function byConfidence(trades: Trade[]): BandRow[] {
+  return CONFIDENCE_LEVELS.map((level) => {
+    const ts = trades.filter((t) => t.confidence_at_entry === level);
+    const stats = aggregate(ts);
+    const e = edge(ts);
+    return {
+      label: `${level}`,
+      count: stats.count,
+      taken: stats.taken,
+      winRate: stats.winRate,
+      totalR: stats.totalR,
+      expectancy: e.expectancy,
+      thin: stats.taken < MIN_SAMPLE,
+    };
+  }).filter((b) => b.count > 0);
+}
+
+/** Consecutive days with at least one entry. Journaling streak, not winning streak. */
+export interface Streaks {
+  journalingCurrent: number;
+  journalingBest: number;
+  adherenceCurrent: number;
+  adherenceBest: number;
+}
+
+const dayOf = (iso: string) => iso.slice(0, 10);
+
+export function streaks(trades: Trade[]): Streaks {
+  const days = [...new Set(trades.map((t) => dayOf(t.date)))].sort();
+
+  const runOf = (list: string[]) => {
+    let best = 0; let current = 0; let prev: string | null = null;
+    for (const day of list) {
+      const consecutive = prev !== null
+        && (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${prev}T00:00:00Z`)) === 86_400_000;
+      current = consecutive ? current + 1 : 1;
+      best = Math.max(best, current);
+      prev = day;
+    }
+    // Only counts as current if it reaches today or yesterday — a streak that
+    // ended in March is not a streak.
+    const today = dayOf(new Date().toISOString());
+    const yesterday = dayOf(new Date(Date.now() - 86_400_000).toISOString());
+    const live = list.length > 0 && (list[list.length - 1] === today || list[list.length - 1] === yesterday);
+    return { current: live ? current : 0, best };
+  };
+
+  // A clean day is one where every trade on it followed the rules.
+  const cleanDays = days.filter((day) => {
+    const onDay = trades.filter((t) => dayOf(t.date) === day);
+    return onDay.length > 0 && onDay.every((t) => derivedAdherence(t));
+  });
+
+  const j = runOf(days);
+  const a = runOf(cleanDays);
+  return {
+    journalingCurrent: j.current, journalingBest: j.best,
+    adherenceCurrent: a.current, adherenceBest: a.best,
+  };
+}
+
+/** R and count per weekday and entry hour, for the heatmap. */
+export interface HeatCell { day: number; hour: number; count: number; totalR: number }
+
+export function whenHeatmap(trades: Trade[]): HeatCell[] {
+  const cells = new Map<string, HeatCell>();
+  for (const t of trades) {
+    if (!isTaken(t.outcome)) continue;
+    const d = new Date(t.date);
+    const day = d.getDay();
+    const hour = d.getHours();
+    const key = `${day}-${hour}`;
+    const cell = cells.get(key) ?? { day, hour, count: 0, totalR: 0 };
+    cell.count += 1;
+    cell.totalR += t.r_multiple ?? 0;
+    cells.set(key, cell);
+  }
+  return [...cells.values()];
+}
+
+/**
+ * Excursion: how far against me before it worked, how far in favour before it
+ * turned, and how many losers touched +1R on the way.
+ */
+export interface Excursion {
+  n: number;
+  avgMaeWinners: number | null;
+  avgMaeLosers: number | null;
+  avgMfeWinners: number | null;
+  avgMfeLosers: number | null;
+  /** Losers that reached +1R first. Management, not selection. */
+  losersThatReached1R: number;
+  losersWithData: number;
+}
+
+export function excursion(trades: Trade[]): Excursion {
+  const taken = trades.filter((t) => isTaken(t.outcome));
+  const winners = taken.filter((t) => t.outcome === 'Win');
+  const losers = taken.filter((t) => t.outcome === 'Loss');
+  const mean = (list: Trade[], key: 'mae_r' | 'mfe_r') => {
+    const vals = list.map((t) => t[key]).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+  const losersWithData = losers.filter((t) => t.reached_1r != null);
+  return {
+    n: taken.filter((t) => t.mae_r != null || t.mfe_r != null).length,
+    avgMaeWinners: mean(winners, 'mae_r'),
+    avgMaeLosers: mean(losers, 'mae_r'),
+    avgMfeWinners: mean(winners, 'mfe_r'),
+    avgMfeLosers: mean(losers, 'mfe_r'),
+    losersThatReached1R: losersWithData.filter((t) => t.reached_1r === true).length,
+    losersWithData: losersWithData.length,
+  };
+}
+
+/**
+ * The two sides of passing on a setup.
+ *
+ * Hesitation cost is R left behind on setups that met the standard. Discipline
+ * value is R saved by passing on ones that did not. If the first is bigger
+ * than my actual losses, entries are not the problem.
+ */
+export interface PassedSetups {
+  hesitationCostR: number;
+  hesitationCount: number;
+  disciplineValueR: number;
+  disciplineCount: number;
+}
+
+export function passedSetups(trades: Trade[]): PassedSetups {
+  const passed = trades.filter((t) => t.outcome === 'Not taken');
+  const shouldHave = passed.filter((t) => t.checklist_score >= TAKE_IT_THRESHOLD && t.trigger_fired);
+  const rightToPass = passed.filter((t) => t.checklist_score < TAKE_IT_THRESHOLD);
+  const sum = (list: Trade[]) =>
+    list.reduce((n, t) => n + (t.would_be_r ?? t.r_left_on_table ?? 0), 0);
+  return {
+    hesitationCostR: sum(shouldHave),
+    hesitationCount: shouldHave.length,
+    // A negative would-be R on a setup below standard is R I did not lose.
+    disciplineValueR: -sum(rightToPass),
+    disciplineCount: rightToPass.length,
+  };
+}
+
+/** R lost per mistake tag, worst first. A tag on a winner still counts as a tag. */
+export function rByMistakeTag(trades: Trade[]): Array<{ tag: MistakeTag; count: number; totalR: number }> {
+  const out = new Map<MistakeTag, { count: number; totalR: number }>();
+  for (const t of trades) {
+    for (const tag of t.mistake_tags) {
+      const entry = out.get(tag) ?? { count: 0, totalR: 0 };
+      entry.count += 1;
+      entry.totalR += t.r_multiple ?? 0;
+      out.set(tag, entry);
+    }
+  }
+  return [...out].map(([tag, v]) => ({ tag, ...v })).sort((a, b) => a.totalR - b.totalR);
 }

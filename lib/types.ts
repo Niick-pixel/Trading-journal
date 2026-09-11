@@ -1,6 +1,6 @@
 import type {
   Account, Direction, HtfBias, Instrument, MistakeTag, Outcome, PremiumDiscount, Reason,
-  Regrade, Session, SetupType, SkipReason, TargetType, TradeStatus, Tri,
+  Regrade, Session, SetupType, ShotSlot, SkipReason, TargetType, TradeStatus, Tri,
 } from './domain';
 import type { FlagKey } from './flags';
 import type { GradeLetter } from './grade';
@@ -75,6 +75,26 @@ export interface Trade {
   take_profit: number | null;
   stop_loss: number | null;
 
+  /** Execution, after the fact. All optional. */
+  entry_time: string | null;
+  exit_time: string | null;
+  /** Worst excursion against the position, in R. Negative. */
+  mae_r: number | null;
+  /** Best excursion in favour, in R. */
+  mfe_r: number | null;
+  mae_points: number | null;
+  mfe_points: number | null;
+  /** If most losers touched +1R first, the problem is management, not selection. */
+  reached_1r: boolean | null;
+
+  /** 1-5, recorded before the outcome. Meaningless afterwards. */
+  confidence_at_entry: number | null;
+
+  /** What a passed setup would have paid. */
+  would_be_r: number | null;
+
+  playbook_id: string | null;
+
   /** Only meaningful when the outcome is 'Not taken'. */
   would_have_hit_tp: boolean | null;
   r_left_on_table: number | null;
@@ -104,6 +124,88 @@ export type TradeInput = Omit<
   | 'created_at' | 'updated_at' | 'position_x' | 'position_y'
   | 'deleted_at' | 'dismissed_flags'
 >;
+
+export interface TradeShot {
+  id: string;
+  trade_id: string;
+  path: string;
+  slot: ShotSlot;
+  ordinal: number;
+}
+
+export interface TradePartial {
+  id: string;
+  trade_id: string;
+  size: number | null;
+  price: number | null;
+  r: number | null;
+  ordinal: number;
+}
+
+export interface Playbook {
+  id: string;
+  name: string;
+  criteria: string | null;
+  reference_screenshot: string | null;
+  archived_at: string | null;
+  created_at: string;
+}
+
+/**
+ * One per trading day, independent of whether anything was traded.
+ *
+ * Mood and sleep are here as correlation data, not as a diary — the point is
+ * to plot adherence against them and find out whether five hours of sleep is
+ * what actually breaks the rules.
+ */
+export interface DailyReview {
+  day: string;
+  account: string | null;
+  bias: string | null;
+  bias_screenshot: string | null;
+  planned_killzones: string | null;
+  planned_levels: string | null;
+  what_happened: string | null;
+  bias_held: boolean | null;
+  trades_planned: number | null;
+  screen_minutes: number | null;
+  sleep_hours: number | null;
+  state_of_mind: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WeeklyReview {
+  week_start: string;
+  summary: string | null;
+  reviewed_ids: string[];
+  created_at: string;
+}
+
+export interface BoardNote {
+  id: string;
+  body: string;
+  x: number;
+  y: number;
+  color: string | null;
+  created_at: string;
+}
+
+export interface BoardEdge {
+  id: string;
+  from_id: string;
+  to_id: string;
+  label: string | null;
+  created_at: string;
+}
+
+/** Informational only. Nothing reads these to decide whether a save is allowed. */
+export interface RiskLimits {
+  max_trades_per_day: number;
+  daily_loss_limit_r: number;
+  max_risk_per_trade_pct: number;
+}
 
 /** One field changing on one trade, at one moment. */
 export interface TradeEdit {

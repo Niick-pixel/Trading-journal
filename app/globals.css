@@ -104,6 +104,16 @@
   --reason-10: 156 28 113;
   --reason-11: 28 28 156;
 
+  /*
+    Chart series colours, for the one chart that puts two series on one axis.
+    Deliberately NOT the win/red-loss pair: rule-followed vs rule-broken is
+    identity, not polarity, and green-vs-red measures ΔE 3.6 under
+    deuteranopia — unreadable. Blue vs amber measures 20.4 and passes every
+    check in the palette validator, in both modes.
+  */
+  --series-a: 28 92 156;
+  --series-b: 138 82 5;
+
   --grade-aplus: 15 122 83;
   --grade-a: 29 122 58;
   --grade-b: 140 97 8;
@@ -148,6 +158,9 @@
   --reason-9: 214 218 98;
   --reason-10: 218 98 178;
   --reason-11: 98 98 218;
+
+  --series-a: 71 128 190;
+  --series-b: 191 138 46;
 
   --grade-aplus: 127 224 180;
   --grade-a: 159 224 138;
