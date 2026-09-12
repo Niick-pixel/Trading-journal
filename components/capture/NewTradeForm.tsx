@@ -313,8 +313,8 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   useEffect(() => { submitRef.current = () => { void submit(); }; });
 
   return (
-    <motion.div {...riseIn} transition={spring} className="glass mx-auto rounded-[28px] p-6 sm:p-8 xl:p-10">
-      <div className="mb-7 flex items-start justify-between gap-4">
+    <motion.div {...riseIn} transition={spring} className="glass mx-auto rounded-[28px] p-6 sm:p-8 xl:p-10 2xl:p-8">
+      <div className="mb-7 flex items-start justify-between gap-4 2xl:mb-5">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
           <p className="mt-1 text-[13px]" style={{ color: 'var(--text-dim)' }}>
@@ -384,24 +384,37 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         At 1280px each gets its own column. Between 1024 and 1280 there is only
         room for two, so the writing — the tallest of the three by far — takes
       {/*
-        Three columns of thought, not one tall strip.
+        Columns of thought, not one tall strip.
 
         Logging a trade used to mean four or five screens of scrolling, and the
         checklist — the part that actually scores the trade — was always the
-        furthest away. The form now sorts itself into three trains of thought
-        that sit side by side: what the trade WAS on the left, what you have to
-        SAY about it in the middle, and what it SCORES on the right. The old
-        "Details" heap is gone; every field in it now lives beside the thing it
-        describes, which is both shorter and easier to read.
+        furthest away. The form sorts itself into four trains of thought: what
+        the trade WAS, WHEN and on WHAT it happened, what you have to SAY about
+        it, and what it SCORES. The old "Details" heap is gone; every field in
+        it now lives beside the thing it describes.
 
-        At 1280px each train gets its own column. Between 1024 and 1280 there is
-        room for two, so the writing — the tallest of the three — takes the
-        right-hand one for both rows while the trade and the score stack down
-        the left; auto-placement would instead have parked the score below both
-        and left a column of dead space. Below 1024px it is one column again.
+        How many of the four get their own column depends on the window:
+
+          under 1024   one column, read top to bottom
+          1024-1279    two, filled across — trade | facts, then writing | score
+          1280-1899    three: trade and facts stack down the left, the writing
+                       and the score take a full-height column each
+          1900+        four, one per train of thought
+
+        The last tier is what a 1440p monitor was always going to want. Three
+        columns leave a 2560px screen a third empty and still cost a scroll,
+        because the checklist is a single ~1000px block that cannot be split —
+        it sets the floor for the whole card no matter how the rest is
+        arranged. Give it a column of its own alongside three shorter ones and
+        the entire capture lands inside one screen.
+
+        The explicit placement at 1280 is doing real work: left to itself the
+        grid would put the writing, the facts and the trade across row one and
+        drop the score alone on row two beside two empty cells.
       */}
-      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-2 lg:gap-y-7 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)] xl:gap-y-6">
-        <div className="space-y-7 lg:col-start-1 lg:row-start-1 xl:col-auto xl:row-auto">
+      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-2 lg:gap-y-7 xl:grid-cols-3 xl:gap-y-6 2xl:grid-cols-4">
+        {/* A — the trade. */}
+        <div className="space-y-7 xl:col-start-1 xl:row-start-1 2xl:col-auto 2xl:row-auto">
         {/* 1 — how it ended. You already know this before you start typing, and
             burying it behind a disclosure made it the last thing recorded. */}
         {/*
@@ -528,10 +541,11 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
             accentFor={(r) => reasonAccent(r as Reason)}
           />
         </Field>
+        </div>
 
-
-        {/* When it happened, and on what. Facts about the trade, so they sit
-            with the trade rather than in a heap at the bottom. */}
+        {/* B — when it happened, and on what. Facts about the trade, so they
+            sit with the trade rather than in a heap at the bottom. */}
+        <div className="space-y-7 xl:col-start-1 xl:row-start-2 2xl:col-auto 2xl:row-auto">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Date & time">
             <Input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -564,6 +578,39 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           <Field label="Target type"><Select value={targetType} onChange={setTargetType} options={TARGET_TYPES} /></Field>
         </div>
 
+        {/* What it paid. Numbers are facts about the trade, so they sit with
+            the rest of the record rather than with the writing — and it keeps
+            the writing column under the height the checklist sets. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
+            <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+              value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
+          </Field>
+          <Field label="Contracts">
+            <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
+          </Field>
+          <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
+            <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+              value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
+          </Field>
+          <Field label="Stop (points)" hint="Optional — it is on the screenshot.">
+            <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
+          </Field>
+        </div>
+
+        {/*
+          Excursion. How far it went against me before it worked, and how
+          far in my favour before it turned — the fastest way to learn
+          whether the stop is too tight or the target too greedy, which no
+          win rate will ever tell me.
+        */}
+        <TriState
+          value={reached1R}
+          onChange={setReached1R}
+          label="Reached +1R before the stop?"
+          hint="If most of your losers did, the problem is management rather than selection."
+        />
+
         {/* Context flags, folded away with a count: a trade that needs none of
             them costs no height at all. */}
         <div className="space-y-2">
@@ -592,7 +639,8 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         </div>
         </div>
 
-        <div className="space-y-7 lg:col-start-2 lg:row-start-1 lg:row-span-2 xl:col-auto xl:row-auto xl:row-span-1">
+        {/* C — the writing, and the reckoning that goes with it. */}
+        <div className="space-y-7 xl:col-start-2 xl:row-start-1 xl:row-span-2 2xl:col-auto 2xl:row-auto 2xl:row-span-1">
         {/* 3 — the writing. */}
         <Field label="Explanation">
           <ExplanationField
@@ -629,38 +677,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         )}
 
 
-        {/* The numbers, then the reckoning. These belong next to the lesson:
-            what it paid and what went wrong are the same conversation. */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
-            <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-              value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
-          </Field>
-          <Field label="Contracts">
-            <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
-          </Field>
-          <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
-            <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-              value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
-          </Field>
-          <Field label="Stop (points)" hint="Optional — it is on the screenshot.">
-            <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
-          </Field>
-        </div>
-
-        {/*
-          Excursion. How far it went against me before it worked, and how
-          far in my favour before it turned — the fastest way to learn
-          whether the stop is too tight or the target too greedy, which no
-          win rate will ever tell me.
-        */}
-        <TriState
-          value={reached1R}
-          onChange={setReached1R}
-          label="Reached +1R before the stop?"
-          hint="If most of your losers did, the problem is management rather than selection."
-        />
-
         {/* After the close: the honest part. */}
         <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
           <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
@@ -672,9 +688,28 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         >
           <TagPicker value={mistakeTags} onChange={setMistakeTags} />
         </Field>
+
+        {/*
+          Your own verdict, directly under your own account of what went wrong.
+
+          It sat under the checklist for a while, so the gap between what the
+          score says and what you believe about yourself would be impossible to
+          miss. On a wide window nothing scrolls any more, so both are on screen
+          together wherever they sit — and the checklist block is the one thing
+          in this form that cannot be split, so anything else stacked on it sets
+          the height of the whole card. This costs nothing and buys the last
+          hundred and thirty pixels.
+        */}
+        <TriState
+          value={followedRules}
+          onChange={setFollowedRules}
+          label="Followed ALL rules"
+          hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
+        />
         </div>
 
-        <div className="space-y-7 lg:col-start-1 lg:row-start-2 xl:col-auto xl:row-auto">
+        {/* D — the score. */}
+        <div className="space-y-7 xl:col-start-3 xl:row-start-1 xl:row-span-2 2xl:col-auto 2xl:row-auto 2xl:row-span-1">
         {/* 5 — the checklist, with the live score. */}
         <div>
           <span className="mb-4 block text-[11px] font-medium uppercase tracking-[0.07em]"
@@ -718,26 +753,12 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
             </Field>
           </div>
 
-          {/*
-            Directly under the score, deliberately. The checklist is what the
-            stats read; this is what you believe about yourself. Side by side,
-            the gap between the two is impossible to miss — which is the whole
-            reason the app records both.
-          */}
-          <div className="mt-6">
-            <TriState
-              value={followedRules}
-              onChange={setFollowedRules}
-              label="Followed ALL rules"
-              hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
-            />
-          </div>
         </div>
         </div>
       </div>
 
 
-      <div className="mt-9 flex items-center justify-between gap-5">
+      <div className="mt-9 flex items-center justify-between gap-5 2xl:mt-6">
         <div className="min-w-0 text-[12px]" style={{ color: 'var(--text-faint)' }}>
           <AnimatePresence mode="wait">
             <motion.span

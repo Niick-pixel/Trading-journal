@@ -15,6 +15,25 @@
   --radius-control: 14px;
   --radius-card: 24px;
   --radius-panel: 28px;
+
+  /*
+    The widest tier, moved out to where a 1440p monitor lives.
+
+    This is Tailwind's own 2xl, retuned from 1536px — not a new breakpoint of
+    our own. Both an inline min-[1900px] variant and a custom --breakpoint-3xl
+    sort AHEAD of the built-in names in the generated stylesheet, so xl kept
+    winning at 2560px and the four-column capture layout never appeared.
+    Overriding an existing breakpoint keeps its place in that order, which is
+    the whole point. Nothing in the app used 2xl at its default value.
+
+    119rem (1904px) rather than 96rem because four columns need roughly 470px
+    each to hold a two-up field row without the labels wrapping. In rem, and
+    not the equivalent in px: Tailwind's own breakpoints are declared in rem
+    and it sorts the media blocks by comparing those declarations, so a px
+    value it cannot compare lands at the front of the stylesheet and every
+    smaller breakpoint then overrides it.
+  */
+  --breakpoint-2xl: 119rem;
 }
 
 /*

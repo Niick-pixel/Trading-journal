@@ -42,12 +42,26 @@ export default async function NewTradePage({
         <div className="min-h-0 flex-1 overflow-y-auto">
           {/*
             Wide, and dynamic with the window.
+
             The form grew past what a single 42rem column could hold without
             becoming a scroll marathon. It now uses whatever width the window
             gives it, up to a readable ceiling, and the card inside lays its
-            sections out in one, two or three columns to match.
+            sections out in one, two, three or four columns to match.
+
+            The ceiling lifts on a genuinely wide screen. 96rem was chosen when
+            the card held three columns; on a 1440p monitor it left a third of
+            the screen empty and still cost a scroll. Past 1900px (this app's retuned 2xl) the card is
+            allowed out to 132rem, which is four columns at the same reading
+            width the three had — wider columns would be the wrong trade, since
+            what is scarce here is height, not characters per line.
+
+            The bottom padding comes in at the same tier. Eighty pixels of run-
+            off below the Save button is right when there is a scroll to end;
+            when the card already fits the window it is eighty pixels standing
+            between fitting and not.
           */}
-          <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6">
+          <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6
+            2xl:max-w-[132rem] 2xl:pb-10">
             <NewTradeForm trade={trade ?? undefined} />
           </div>
         </div>

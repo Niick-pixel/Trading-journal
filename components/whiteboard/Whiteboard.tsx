@@ -8,7 +8,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  computeLayout, reasonAccent, GROUP_LABELS, GROUP_MODES, NODE_H, NODE_W, type GroupMode,
+  computeLayout, reasonAccent, tradeIdFromKey,
+  GROUP_LABELS, GROUP_MODES, NODE_H, NODE_W, type GroupMode,
 } from '@/lib/layout';
 import { spring, springBouncy } from '@/lib/motion';
 import type { BoardEdge, BoardNote, Trade } from '@/lib/types';
@@ -236,7 +237,10 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     }));
 
     const tradeNodes: Node[] = layout.nodes.map((n) => ({
-      id: n.trade.id,
+      // The placement, not the trade: under 'mistake' one trade is legitimately
+      // on the board more than once. Everything that acts on a card reads the
+      // trade back out of the key, or off the node's own data.
+      id: n.key,
       type: 'trade',
       position: { x: n.x, y: n.y },
       data: {
@@ -271,7 +275,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
 
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
-      const reason = layout.nodes.find((n) => n.trade.id === a)?.reason;
+      const reason = layout.nodes.find((n) => n.key === a)?.reason;
       const accent = reason ? reasonAccent(reason) : '140 140 150';
       return {
         id: `r-${a}-${b}`,
@@ -407,7 +411,8 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         });
         continue;
       }
-      const { id, position } = change;
+      const { position } = change;
+      const id = tradeIdFromKey(change.id);
       setTrades((prev) => prev.map((t) =>
         t.id === id ? { ...t, position_x: position.x, position_y: position.y } : t));
       void fetch(`/api/trades/${id}/position`, {
@@ -565,7 +570,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           event.preventDefault();
           const items = [];
           if (node.type === 'trade') {
-            const id = node.id;
+            const id = tradeIdFromKey(node.id);
             items.push({ label: 'Open', onClick: () => setOpenId(id) });
             items.push({
               label: locked.has(id) ? 'Unlock position' : 'Lock in place',

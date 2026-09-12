@@ -63,6 +63,22 @@ export interface PositionedTrade {
   x: number;
   y: number;
   reason: Reason;
+  /**
+   * Identifies this PLACEMENT, not the trade.
+   *
+   * Grouping by mistake puts a trade with three tags in three clusters, which
+   * is the whole point of that view — you want to see every trade each error
+   * touched. But the board keyed its nodes by trade id, so the three copies
+   * collided and React Flow kept one and dropped the rest: two of the three
+   * clusters were quietly missing the card that put them there.
+   */
+  key: string;
+}
+
+/** The trade behind a placement key. */
+export function tradeIdFromKey(key: string): string {
+  const at = key.lastIndexOf('::');
+  return at === -1 ? key : key.slice(at + 2);
 }
 
 export interface PositionedCluster {
@@ -205,11 +221,15 @@ export function computeLayout(trades: Trade[], scale = 1, mode: GroupMode = 'rea
       placed.push({
         trade,
         reason: trade.reason,
+        key: `${group.key}::${trade.id}`,
         x: (pinned ? trade.position_x : null) ?? cursorX + PAD + col * (nodeW + GAP_X) + jitterX,
         y: (pinned ? trade.position_y : null) ?? cursorY + HEADER_H + row * (nodeH + GAP_Y) + jitterY,
       });
 
-      if (i > 0) reasonEdges.push([ordered[i - 1].id, trade.id]);
+      // Between placements, not between trades: the same pair of trades can be
+      // adjacent inside two different mistake clusters and each chain is its
+      // own line.
+      if (i > 0) reasonEdges.push([placed[i - 1].key, placed[i].key]);
     });
 
     nodes.push(...placed);
