@@ -14,12 +14,20 @@ interface ExplanationFieldProps {
   required?: boolean;
   /** The floor this particular field has to clear. */
   minChars?: number;
+  /**
+   * This text is already on record below the current floor, and unchanged.
+   * The counter says so instead of demanding characters that nothing will
+   * actually ask for — the minimum applies to what you write, not to what a
+   * trade already says.
+   */
+  kept?: boolean;
   minRows?: number;
 }
 
 /** Auto-growing textarea with a character counter that earns its keep. */
 export function ExplanationField({
-  value, onChange, placeholder, required = true, minChars = MIN_EXPLANATION, minRows = 4,
+  value, onChange, placeholder, required = true, minChars = MIN_EXPLANATION,
+  kept = false, minRows = 4,
 }: ExplanationFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const glow = useGlowState();
@@ -59,10 +67,12 @@ export function ExplanationField({
       {required && (
         <div className="mt-2 flex items-center justify-between gap-4 text-[11px] tabular-nums">
           <motion.span
-            animate={{ color: met ? 'var(--text-faint)' : 'rgb(var(--amber))' }}
+            animate={{ color: met || kept ? 'var(--text-faint)' : 'rgb(var(--amber))' }}
             transition={spring}
           >
-            {met ? 'Minimum met' : `${remaining} more character${remaining === 1 ? '' : 's'}`}
+            {met ? 'Minimum met'
+              : kept ? (length > 0 ? 'Kept as written' : 'Left blank at the time')
+              : `${remaining} more character${remaining === 1 ? '' : 's'}`}
           </motion.span>
           <span style={{ color: 'var(--text-faint)' }}>{length} / {minChars}</span>
         </div>

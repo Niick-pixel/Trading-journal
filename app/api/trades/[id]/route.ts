@@ -24,7 +24,15 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     const image = form.get('screenshot');
     const replacing = image instanceof File && image.size > 0;
 
-    const check = parseTradeInput({ ...JSON.parse(payload), screenshot_path: existing.screenshot_path });
+    /*
+      The floor for the writing is measured against what this trade already
+      says. Correcting the P&L on a trade logged under the old minimum must
+      not demand that its explanation be rewritten to the new one.
+    */
+    const check = parseTradeInput(
+      { ...JSON.parse(payload), screenshot_path: existing.screenshot_path },
+      { previous: { explanation: existing.explanation, lesson: existing.lesson } },
+    );
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
 
     const screenshot_path = replacing ? await saveScreenshot(image) : existing.screenshot_path;

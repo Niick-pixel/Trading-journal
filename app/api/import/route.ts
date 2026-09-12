@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     }
     if (getTrade(id)) { skipped += 1; continue; }
 
-    const check = parseTradeInput(raw);
+    // Restoring, not authoring: these rows cleared whatever floor was in force
+    // when they were written, and a backup that will not restore is not one.
+    const check = parseTradeInput(raw, { restoring: true });
     if (!check.ok) { rejected.push({ id, error: check.error }); continue; }
 
     const r = raw as Record<string, unknown>;

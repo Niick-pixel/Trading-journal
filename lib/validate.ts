@@ -7,11 +7,35 @@ import {
 import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
 
 /**
+ * Whose standard a piece of writing is held to.
+ *
+ * The minimums went up. Applied naively that makes every trade written under
+ * the old rule impossible to save again — open one to correct its P&L and the
+ * app refuses until you have written seventy more characters about a trade
+ * from three weeks ago. That is the app becoming a gatekeeper over its own
+ * history, which is the one thing it must never be.
+ *
+ * So the floor applies to what you write, not to what is already on record.
+ * Pass `previous` on an edit: text that is byte-identical to what is stored
+ * passes at any length, and the moment you change it the current floor
+ * applies. Pass `restoring` for an import — those rows were authored once
+ * already, under whatever rule was in force then, and a backup that will not
+ * restore is not a backup.
+ */
+export interface WritingFloor {
+  previous?: { explanation: string; lesson: string | null };
+  restoring?: boolean;
+}
+
+/**
  * Validates a trade payload before it reaches SQLite. The CHECK constraints in
  * the schema are the real backstop — this exists so the UI gets a sentence it
  * can show instead of a constraint name.
  */
-export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } | { ok: false; error: string } {
+export function parseTradeInput(
+  raw: unknown,
+  floor: WritingFloor = {},
+): { ok: true; value: TradeInput } | { ok: false; error: string } {
   if (typeof raw !== 'object' || raw === null) return { ok: false, error: 'Malformed trade payload.' };
   const t = raw as Record<string, unknown>;
 
@@ -47,8 +71,14 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
   const reason = oneOf('reason', REASONS);
   if (!reason) return { ok: false, error: 'A reason is required — name why you took the trade.' };
 
+  /** Text already on record, unchanged, is not being written now. */
+  const asWritten = (value: string, before: string | null | undefined) =>
+    floor.restoring === true || (before != null && value === before.trim());
+
   const explanation = typeof t.explanation === 'string' ? t.explanation.trim() : '';
-  if (explanation.length < MIN_EXPLANATION) {
+  if (!explanation) return { ok: false, error: 'An explanation is required.' };
+  if (explanation.length < MIN_EXPLANATION
+      && !asWritten(explanation, floor.previous?.explanation)) {
     return { ok: false, error: `The explanation needs at least ${MIN_EXPLANATION} characters.` };
   }
 
@@ -59,7 +89,8 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
   */
   const lesson = typeof t.lesson === 'string' ? t.lesson.trim() : '';
   const planned = t.status === 'Planned';
-  if (!planned && lesson.length < MIN_LESSON) {
+  const lessonBefore = floor.previous ? (floor.previous.lesson ?? '') : undefined;
+  if (!planned && lesson.length < MIN_LESSON && !asWritten(lesson, lessonBefore)) {
     return {
       ok: false,
       error: `The lesson needs at least ${MIN_LESSON} characters — what would you do differently?`,

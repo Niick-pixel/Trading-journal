@@ -206,9 +206,19 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const fired = triggerFired(checks);
   const planned = status === 'Planned';
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
-  const explanationOk = explanation.trim().length >= MIN_EXPLANATION;
+  /*
+    The minimums apply to what you write, not to what a trade already says.
+    An entry logged under the old, shorter floor stays editable at its
+    original length; touch the text and the current floor applies from there.
+    The same rule the API enforces, so the button never promises a save the
+    server will refuse — or refuses one it would have accepted.
+  */
+  const keptExplanation = editing && explanation.trim() === trade!.explanation.trim();
+  const keptLesson = editing && lesson.trim() === (trade!.lesson ?? '').trim();
+  const explanationOk = explanation.trim().length >= MIN_EXPLANATION
+    || (keptExplanation && explanation.trim().length > 0);
   // A Planned trade has no result to learn from, so it is not asked for one.
-  const lessonOk = planned || lesson.trim().length >= MIN_LESSON;
+  const lessonOk = planned || lesson.trim().length >= MIN_LESSON || keptLesson;
   const canSubmit = (Boolean(file) || editing)
     && Boolean(reason) && explanationOk && lessonOk && !submitting;
 
@@ -589,6 +599,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
             value={explanation}
             onChange={setExplanation}
             minChars={MIN_EXPLANATION}
+            kept={keptExplanation}
             minRows={8}
             placeholder="What did you see, what did you expect, and what made you click the button?"
           />
@@ -610,6 +621,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               onChange={setLesson}
               required
               minChars={MIN_LESSON}
+              kept={keptLesson}
               minRows={8}
               placeholder="Next time: the sweep was there but I took it before the candle closed. Wait for the close, even when it looks like it is leaving without me."
             />
