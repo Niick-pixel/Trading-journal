@@ -192,7 +192,7 @@ export default async function StatsPage(
               */}
               <Panel
                 title="Adherence"
-                note="Share of trades where the checklist itself says the rules were followed — trigger fired, 70 or more, no mistake tagged. Derived, never self-reported."
+                note="Share of the SCORED trades where the checklist says the rules were followed — trigger fired, 70 or more, no mistake tagged. Derived, never self-reported. A trade whose checklist was left blank counts as neither."
               >
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div>
@@ -208,13 +208,20 @@ export default async function StatsPage(
                       {pct(d.adherenceRate)}
                     </div>
                     <div className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                      n = {agg.count}
-                      {agg.count < 20 && ' — too few to conclude anything'}
+                      n = {d.followed.count + d.broken.count}
+                      {d.unscored.count > 0 && ` · ${d.unscored.count} not scored`}
+                      {(d.followed.count + d.broken.count) < 20 && ' — too few to conclude anything'}
                     </div>
                   </div>
                   <div className="flex-1 min-w-[12rem]">
                     <Line label="Followed the rules" value={`${d.followed.count} · ${r(d.followed.totalR)}`} tone="win" />
                     <Line label="Broke a rule" value={`${d.broken.count} · ${r(d.broken.totalR)}`} tone="loss" />
+                    {d.unscored.count > 0 && (
+                      <Line
+                        label="Not scored"
+                        value={`${d.unscored.count} · ${r(d.unscored.totalR)}`}
+                      />
+                    )}
                   </div>
                 </div>
               </Panel>
@@ -277,14 +284,9 @@ export default async function StatsPage(
                   <Line label="Gross won" value={usd(m.won)} tone="win" />
                   <Line label="Gross lost" value={usd(m.lost)} tone="loss" />
                   <Line label="Net" value={usd(m.net)} tone={m.net >= 0 ? 'win' : 'loss'} />
-                  <Line label="Total risked" value={usd(m.totalRisked)} />
                   <Line label="Biggest win" value={usd(m.biggestWin)} tone="win" />
                   <Line label="Biggest loss" value={usd(-m.biggestLoss)} tone="loss" />
-                  <Line label="Return on risk"
-                    value={m.totalRisked
-                      ? `${m.net < 0 ? '−' : ''}${Math.abs((m.net / m.totalRisked) * 100).toFixed(1)}%`
-                      : '—'}
-                    tone={m.net >= 0 ? 'win' : 'loss'} />
+
                 </Panel>
 
                 <Panel title="What is costing you" note="Reasons ranked by R actually lost — losses only, so a reason that both makes and loses a lot cannot hide behind its wins.">

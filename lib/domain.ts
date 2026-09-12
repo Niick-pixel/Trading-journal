@@ -285,3 +285,16 @@ export const MIN_SAMPLE = 20;
 
 /** Recorded before the outcome is known, or it measures nothing. */
 export const CONFIDENCE_LEVELS = [1, 2, 3, 4, 5] as const;
+
+
+/**
+ * Was this trade's checklist actually answered?
+ *
+ * Every box starting false is deliberate — nothing on the form asserts
+ * anything I did not say — but it means "not filled in" and "failed every
+ * item" look identical in the data. This is the one place that distinction is
+ * recoverable: if no box is ticked at all, the checklist was skipped.
+ */
+export function isScored(t: Partial<Record<ChecklistKey, boolean>>): boolean {
+  return CHECKLIST_KEYS.some((k) => t[k] === true);
+}

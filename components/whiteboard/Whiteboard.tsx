@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Background, BackgroundVariant, ReactFlow, ReactFlowProvider, ViewportPortal,
+  Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useReactFlow,
   type Edge, type Node, type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -22,15 +22,17 @@ import { DetailPanel } from './DetailPanel';
 import { Toolbar, EMPTY_FILTERS, applyFilters, filtersActive, type Filters } from './Toolbar';
 import { BulkBar } from './BulkBar';
 import { RiskBanner } from './RiskBanner';
-import { StickyNotes } from './StickyNotes';
+import { NoteNode } from './NoteNode';
+import { ContextMenu, type MenuState } from './ContextMenu';
 import { SearchPalette } from './SearchPalette';
 import { StreakBadge } from './StreakBadge';
 import { SavedViews } from './SavedViews';
 import { OUTCOME_COLOR, TradeNode } from './TradeNode';
 
-const nodeTypes = { trade: TradeNode, cluster: ClusterNode, title: BoardTitle };
+const nodeTypes = { trade: TradeNode, cluster: ClusterNode, title: BoardTitle, note: NoteNode };
 
 function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[]; readOnly?: boolean }) {
+  const flow = useReactFlow();
   const [trades, setTrades] = useState(initial);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -78,15 +80,52 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     return () => document.removeEventListener('keydown', onKey);
   }, [readOnly, searching]);
 
-  /** A note lands where the viewport is, not at the origin of a huge board. */
+  /** Locked items refuse to move. Kept per machine — it is a working habit. */
+  const [locked, setLocked] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<MenuState | null>(null);
+
+  const toggleLock = useCallback((id: string) => {
+    setLocked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const saveNote = useCallback((id: string, body: string) => {
+    void fetch('/api/board', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'note', id, body }),
+    });
+  }, []);
+
+  const removeNote = useCallback(async (id: string) => {
+    await fetch(`/api/board?kind=note&id=${id}`, { method: 'DELETE' });
+    await loadBoard();
+  }, [loadBoard]);
+
+  const moveNote = useCallback((id: string, x: number, y: number) => {
+    void fetch('/api/board', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'note', id, x, y }),
+    });
+  }, []);
+
+  /** A note lands in the middle of what I am looking at, not at the origin. */
   const addNote = useCallback(async () => {
+    const centre = flow.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
     await fetch('/api/board', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'note', body: '', x: 40, y: 40 }),
+      body: JSON.stringify({ kind: 'note', body: '', x: centre.x - 112, y: centre.y - 60 }),
     });
     await loadBoard();
-  }, [loadBoard]);
+  }, [loadBoard, flow]);
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/trades');
@@ -98,6 +137,21 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
 
   const visible = useMemo(() => trades.filter(applyFilters(filters)), [trades, filters]);
   const layout = useMemo(() => computeLayout(visible, scale, groupMode), [visible, scale, groupMode]);
+
+  /** Content bounding box plus a generous margin, for the pan wall. */
+  const bounds = useMemo<[[number, number], [number, number]]>(() => {
+    const xs = layout.clusters.flatMap((c) => [c.x, c.x + c.width]);
+    const ys = layout.clusters.flatMap((c) => [c.y, c.y + c.height]);
+    const noteXs = board.notes.flatMap((n) => [n.x, n.x + 240]);
+    const noteYs = board.notes.flatMap((n) => [n.y, n.y + 140]);
+    const all = { x: [...xs, ...noteXs], y: [...ys, ...noteYs] };
+    if (all.x.length === 0) return [[-2000, -2000], [2000, 2000]];
+    const M = 1600;
+    return [
+      [Math.min(...all.x) - M, Math.min(...all.y) - M - 260],
+      [Math.max(...all.x) + M, Math.max(...all.y) + M],
+    ];
+  }, [layout.clusters, board.notes]);
 
   const onOpen = useCallback((id: string) => {
     if (readOnly) return;
@@ -171,7 +225,11 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
       type: 'cluster',
       position: { x: cluster.x, y: cluster.y },
       data: { cluster, accent: cluster.accent, index },
-      draggable: false,
+      // A group moves as a group. Dragging the enclosure carries every card in
+      // it — rearranging the board by reason is the point of the board, and
+      // doing it one card at a time is not rearranging, it is tidying.
+      draggable: !readOnly && groupMode === 'reason' && !locked.has(`cluster-${cluster.key}`),
+      dragHandle: '.signature-cluster-handle',
       selectable: false,
       zIndex: 0,
       style: { width: cluster.width, height: cluster.height },
@@ -192,11 +250,24 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
       zIndex: 1,
       // Only the grab handle moves a node. See TradeNode for why.
       dragHandle: '.signature-drag-handle',
+      draggable: !readOnly && !locked.has(n.trade.id),
       style: { width: NODE_W * scale, height: NODE_H * scale },
     }));
 
-    return [...titleNode, ...clusterNodes, ...tradeNodes];
-  }, [layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds, groupMode, visible.length]);
+    const noteNodes: Node[] = board.notes.map((note) => ({
+      id: `note-${note.id}`,
+      type: 'note',
+      position: { x: note.x, y: note.y },
+      data: { note, onSave: saveNote, onRemove: removeNote, locked: locked.has(`note-${note.id}`) },
+      draggable: !locked.has(`note-${note.id}`),
+      zIndex: 5,
+    }));
+
+    return [...titleNode, ...clusterNodes, ...tradeNodes, ...noteNodes];
+  }, [
+    layout, openId, onOpen, scale, prefs.dimPassed, selectMode, selectedIds, groupMode,
+    visible.length, board.notes, saveNote, removeNote, locked,
+  ]);
 
   const edges = useMemo<Edge[]>(() => {
     const within: Edge[] = layout.reasonEdges.map(([a, b]) => {
@@ -281,9 +352,61 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
     be permanent.
   */
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    if (groupMode !== 'reason') return;
     for (const change of changes) {
-      if (change.type !== 'position' || change.dragging !== false || !change.position) continue;
+      if (change.type !== 'position' || !change.position) continue;
+
+      /*
+        Notes are controlled nodes whose position lives on the server, so the
+        local copy has to move WHILE the drag happens. Without this the node
+        was re-rendered back to its stored position on every frame and never
+        appeared to move at all — the drag was working and being undone
+        sixty times a second.
+
+        They also move in every grouping: a note annotates the canvas, not the
+        arrangement, so it keeps its place whatever is being grouped by.
+      */
+      if (change.id.startsWith('note-')) {
+        const noteId = change.id.slice(5);
+        const { x, y } = change.position;
+        setBoard((prev) => ({
+          ...prev,
+          notes: prev.notes.map((n) => (n.id === noteId ? { ...n, x, y } : n)),
+        }));
+        if (change.dragging === false) moveNote(noteId, x, y);
+        continue;
+      }
+
+      if (change.dragging !== false) continue;
+      if (groupMode !== 'reason') continue;
+
+      /*
+        Dragging an enclosure drags its contents. React Flow reports only the
+        cluster's own move, so the delta is applied to each card inside it and
+        the whole group is written back in one request.
+      */
+      if (change.id.startsWith('cluster-')) {
+        const key = change.id.slice(8);
+        const cluster = layout.clusters.find((c) => c.key === key);
+        if (!cluster) continue;
+        const dx = change.position.x - cluster.x;
+        const dy = change.position.y - cluster.y;
+        if (dx === 0 && dy === 0) continue;
+
+        const moved = cluster.trades.map((t) => {
+          const node = layout.nodes.find((n) => n.trade.id === t.id);
+          return { id: t.id, x: (node?.x ?? 0) + dx, y: (node?.y ?? 0) + dy };
+        });
+        setTrades((prev) => prev.map((t) => {
+          const m = moved.find((v) => v.id === t.id);
+          return m ? { ...t, position_x: m.x, position_y: m.y } : t;
+        }));
+        void fetch('/api/trades/positions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ positions: moved }),
+        });
+        continue;
+      }
       const { id, position } = change;
       setTrades((prev) => prev.map((t) =>
         t.id === id ? { ...t, position_x: position.x, position_y: position.y } : t));
@@ -293,7 +416,7 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         body: JSON.stringify({ x: position.x, y: position.y }),
       });
     }
-  }, [groupMode]);
+  }, [groupMode, moveNote, layout]);
 
   /**
    * Pin anything the layout just placed for the first time.
@@ -418,6 +541,17 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
         minZoom={0.12}
         maxZoom={2.2}
+        /*
+          A wall around the board. Without it one careless scroll sends the
+          canvas into empty space with no landmark to steer back by, and the
+          only way home is the fit button. The extent is the content plus a
+          screen of margin on each side, recomputed as the board grows.
+        */
+        translateExtent={bounds}
+        nodeExtent={bounds}
+        /* Snapping makes a group drag land cleanly instead of a pixel off. */
+        snapToGrid
+        snapGrid={[8, 8]}
         nodesConnectable={false}
         elementsSelectable={false}
         nodesDraggable={!readOnly}
@@ -426,16 +560,74 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
         zoomOnDoubleClick={!readOnly}
         panOnScroll={!readOnly}
         selectionOnDrag={false}
-        onPaneClick={() => setOpenId(null)}
+        onPaneClick={() => { setOpenId(null); setMenu(null); }}
+        onNodeContextMenu={(event, node) => {
+          event.preventDefault();
+          const items = [];
+          if (node.type === 'trade') {
+            const id = node.id;
+            items.push({ label: 'Open', onClick: () => setOpenId(id) });
+            items.push({
+              label: locked.has(id) ? 'Unlock position' : 'Lock in place',
+              onClick: () => toggleLock(id),
+            });
+            items.push({
+              label: 'Move to Trash',
+              danger: true,
+              onClick: async () => {
+                await fetch(`/api/trades/${id}`, { method: 'DELETE' });
+                await refresh();
+              },
+            });
+          } else if (node.type === 'note') {
+            const noteId = node.id.slice(5);
+            items.push({
+              label: locked.has(node.id) ? 'Unlock note' : 'Lock in place',
+              onClick: () => toggleLock(node.id),
+            });
+            items.push({ label: 'Delete note', danger: true, onClick: () => void removeNote(noteId) });
+          } else if (node.type === 'cluster') {
+            items.push({
+              label: locked.has(node.id) ? 'Unlock group' : 'Lock group in place',
+              onClick: () => toggleLock(node.id),
+            });
+          }
+          if (items.length) setMenu({ x: event.clientX, y: event.clientY, items });
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          if (!edge.id.startsWith('m-')) return;
+          event.preventDefault();
+          const edgeId = edge.id.slice(2);
+          setMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items: [{
+              label: 'Delete link',
+              danger: true,
+              onClick: async () => {
+                await fetch(`/api/board?kind=edge&id=${edgeId}`, { method: 'DELETE' });
+                await loadBoard();
+              },
+            }],
+          });
+        }}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          setMenu({
+            x: (event as MouseEvent).clientX,
+            y: (event as MouseEvent).clientY,
+            items: [
+              { label: 'Add a note here', onClick: () => void addNote() },
+              { label: 'Fit everything', onClick: () => flow.fitView({ padding: 0.18, duration: 400 }) },
+            ],
+          });
+        }}
         attributionPosition="bottom-center"
         style={{ background: 'transparent' }}
       >
         {prefs.showGrid && (
           <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--board-dots)" />
         )}
-        <ViewportPortal>
-          <StickyNotes notes={board.notes} onChanged={loadBoard} />
-        </ViewportPortal>
       </ReactFlow>
 
       {/* Filtering to nothing used to leave a blank canvas with no explanation. */}
@@ -468,6 +660,8 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
           <BoardControls onRecluster={recluster} />
         </div>
       )}
+
+      <ContextMenu menu={menu} onClose={() => setMenu(null)} />
 
       <SearchPalette
         trades={trades}

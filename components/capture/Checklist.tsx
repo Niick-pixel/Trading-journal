@@ -19,7 +19,7 @@ interface ChecklistProps {
  */
 export function Checklist({ answers, onChange, accent = 'var(--accent)' }: ChecklistProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 xl:grid xl:grid-cols-3 xl:items-start xl:gap-6 xl:space-y-0">
       {CHECKLIST_PHASES.map((phase) => {
         const earned = phase.items.reduce((sum, i) => sum + (answers[i.key] ? i.points : 0), 0);
         const possible = phase.items.reduce((sum, i) => sum + i.points, 0);
@@ -112,7 +112,7 @@ export function Checklist({ answers, onChange, accent = 'var(--accent)' }: Check
         );
       })}
 
-      <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-faint)' }}>
+      <p className="text-[11px] leading-relaxed xl:col-span-3" style={{ color: 'var(--text-faint)' }}>
         Phase 3 must fire for an entry to exist. At {TAKE_IT_THRESHOLD} or more with the trigger
         fired, taking it is the rule — hesitating is a rule break, same as oversizing.
       </p>

@@ -60,7 +60,10 @@ function ClusterNodeInner({ data }: NodeProps) {
         label until it truncated to an ellipsis — and the label is the single
         most important word on the region. Now neither can crowd the other.
       */}
-      <div className="px-7 pt-4">
+      <div
+        className="signature-cluster-handle pointer-events-auto cursor-grab px-7 pt-4 active:cursor-grabbing"
+        title="Drag to move the whole group"
+      >
         <div className="flex items-center gap-2">
           <span className="size-2 shrink-0 rounded-full"
             style={{ background: `rgb(${accent})`, boxShadow: `0 0 10px rgb(${accent})` }} />

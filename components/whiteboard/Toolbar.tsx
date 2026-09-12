@@ -122,7 +122,13 @@ export function Toolbar({
       initial={{ y: -12, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={spring}
-      className="glass pointer-events-auto flex flex-wrap items-center gap-x-5 gap-y-2.5 rounded-[20px] px-4 py-2.5"
+      /*
+        Centred, and wrapping symmetrically. The bar had grown left-aligned
+        with a count pinned to the far right, so at a wide window it read as
+        one long ragged line with a hole in the middle.
+      */
+      className="glass pointer-events-auto mx-auto flex max-w-[92rem] flex-wrap items-center
+        justify-center gap-x-5 gap-y-2.5 rounded-[20px] px-5 py-2.5"
     >
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-faint)' }}>
@@ -248,7 +254,7 @@ export function Toolbar({
       <Chip label="+ Note" active={false} onClick={onAddNote} />
       {onLinkSelected && <Chip label="Link these two" active onClick={onLinkSelected} />}
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
           {shown === total ? `${total} trade${total === 1 ? '' : 's'}` : `${shown} of ${total}`}
         </span>

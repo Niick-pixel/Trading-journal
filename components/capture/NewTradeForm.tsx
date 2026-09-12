@@ -17,6 +17,7 @@ import { press, spring, springSoft, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
 import { MIN_EXPLANATION, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
+import { Disclosure } from '@/components/ui/Disclosure';
 import { Field, Input } from '@/components/ui/Field';
 import { GradeBadge } from '@/components/ui/GradeBadge';
 import { Segmented } from '@/components/ui/Segmented';
@@ -69,18 +70,12 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [account, setAccount] = useState<Account>(trade?.account ?? 'Backtest (FX Replay)');
   const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
   const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
-  const [riskPercent, setRiskPercent] = useState(trade?.risk_percent?.toString() ?? '');
   const [pnlDollars, setPnlDollars] = useState(trade?.pnl_dollars?.toString() ?? '');
-  const [entryTime, setEntryTime] = useState(trade?.entry_time ?? '');
-  const [exitTime, setExitTime] = useState(trade?.exit_time ?? '');
   const [maeR, setMaeR] = useState(trade?.mae_r?.toString() ?? '');
   const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
   const [reached1R, setReached1R] = useState<Tri>(trade?.reached_1r ?? null);
   const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
   const [wouldBeR, setWouldBeR] = useState(trade?.would_be_r?.toString() ?? '');
-  const [entryPrice, setEntryPrice] = useState(trade?.entry_price?.toString() ?? '');
-  const [takeProfit, setTakeProfit] = useState(trade?.take_profit?.toString() ?? '');
-  const [stopLoss, setStopLoss] = useState(trade?.stop_loss?.toString() ?? '');
   const [wouldHaveHitTp, setWouldHaveHitTp] = useState<boolean | null>(trade?.would_have_hit_tp ?? null);
   const [rLeftOnTable, setRLeftOnTable] = useState(trade?.r_left_on_table?.toString() ?? '');
   const [skipReason, setSkipReason] = useState<SkipReason | null>(trade?.skip_reason ?? null);
@@ -95,7 +90,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [targetType, setTargetType] = useState<TargetType>(trade?.target_type ?? 'Horizontal liquidity pool');
   const [outcome, setOutcome] = useState<Outcome>(trade?.outcome ?? 'Win');
   const [contracts, setContracts] = useState(trade?.contracts?.toString() ?? '');
-  const [riskDollars, setRiskDollars] = useState(trade?.risk_dollars?.toString() ?? '');
   const [stopPoints, setStopPoints] = useState(trade?.stop_points?.toString() ?? '');
   const [rMultiple, setRMultiple] = useState(trade?.r_multiple?.toString() ?? '');
   const [lesson, setLesson] = useState(trade?.lesson ?? '');
@@ -127,15 +121,13 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
     date, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
     context, checks, followedRules, mistakeTags, account, accountLabel, status,
-    contracts, riskDollars, riskPercent, pnlDollars, stopPoints, rMultiple,
-    entryPrice, takeProfit, stopLoss, entryTime, exitTime, maeR, mfeR,
+    contracts, pnlDollars, stopPoints, rMultiple, maeR, mfeR,
     reached1R, confidence, wouldBeR, macroOverride,
   }), [
     date, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
     context, checks, followedRules, mistakeTags, account, accountLabel, status,
-    contracts, riskDollars, riskPercent, pnlDollars, stopPoints, rMultiple,
-    entryPrice, takeProfit, stopLoss, entryTime, exitTime, maeR, mfeR,
+    contracts, pnlDollars, stopPoints, rMultiple, maeR, mfeR,
     reached1R, confidence, wouldBeR, macroOverride,
   ]);
 
@@ -173,16 +165,9 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
     if (has('accountLabel')) setAccountLabel(v.accountLabel);
     if (has('status')) setStatus(v.status);
     if (has('contracts')) setContracts(v.contracts);
-    if (has('riskDollars')) setRiskDollars(v.riskDollars);
-    if (has('riskPercent')) setRiskPercent(v.riskPercent);
     if (has('pnlDollars')) setPnlDollars(v.pnlDollars);
     if (has('stopPoints')) setStopPoints(v.stopPoints);
     if (has('rMultiple')) setRMultiple(v.rMultiple);
-    if (has('entryPrice')) setEntryPrice(v.entryPrice);
-    if (has('takeProfit')) setTakeProfit(v.takeProfit);
-    if (has('stopLoss')) setStopLoss(v.stopLoss);
-    if (has('entryTime')) setEntryTime(v.entryTime);
-    if (has('exitTime')) setExitTime(v.exitTime);
     if (has('maeR')) setMaeR(v.maeR);
     if (has('mfeR')) setMfeR(v.mfeR);
     if (has('reached1R')) setReached1R(v.reached1R);
@@ -258,13 +243,23 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       grade_at_entry: status === 'Planned' ? total : (trade?.grade_at_entry ?? total),
       // True unless this record was opened as a Plan and settled later.
       graded_post_hoc: trade ? trade.graded_post_hoc : status !== 'Planned',
-      entry_price: num(entryPrice), take_profit: num(takeProfit), stop_loss: num(stopLoss),
+      entry_price: trade?.entry_price ?? null,
+      take_profit: trade?.take_profit ?? null,
+      stop_loss: trade?.stop_loss ?? null,
       would_have_hit_tp: wouldHaveHitTp,
       r_left_on_table: num(rLeftOnTable),
       skip_reason: skipReason,
-      contracts: num(contracts), risk_dollars: num(riskDollars), risk_percent: num(riskPercent),
+      contracts: num(contracts),
+      /*
+        These four are on the screenshot, so the form stopped asking. An edit
+        must still carry whatever an older record already holds — dropping them
+        here would quietly erase data the form no longer shows.
+      */
+      risk_dollars: trade?.risk_dollars ?? null,
+      risk_percent: trade?.risk_percent ?? null,
       stop_points: num(stopPoints),
-      entry_time: entryTime || null, exit_time: exitTime || null,
+      entry_time: trade?.entry_time ?? null,
+      exit_time: trade?.exit_time ?? null,
       mae_r: num(maeR), mfe_r: num(mfeR), mae_points: null, mfe_points: null,
       reached_1r: reached1R,
       confidence_at_entry: confidence,
@@ -306,7 +301,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   useEffect(() => { submitRef.current = () => { void submit(); }; });
 
   return (
-    <motion.div {...riseIn} transition={spring} className="glass rounded-[28px] p-7 sm:p-9">
+    <motion.div {...riseIn} transition={spring} className="glass mx-auto rounded-[28px] p-6 sm:p-8 xl:p-10">
       <div className="mb-7 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold">{editing ? 'Edit trade' : 'New trade'}</h1>
@@ -373,7 +368,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           backtest R and live R summing into one number would make every other
           figure in the app a lie.
         */}
-        <div className="mb-7 grid gap-5 sm:grid-cols-2">
+        <div className="mb-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           <Field label="Account" hint="Backtest R and live R never sum into the same number.">
             <Select value={account} onChange={setAccount} options={ACCOUNTS} />
           </Field>
@@ -458,23 +453,36 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           />
         </Field>
 
-        {/* 4 — context, as pills, in two groups. */}
-        <div className="space-y-5">
-          {CONTEXT_GROUPS.map((group) => (
-            <Field key={group.label} label={group.label}>
-              <div className="flex flex-wrap gap-2.5">
-                {group.flags.map((flag) => (
-                  <TogglePill
-                    key={flag.key}
-                    checked={context[flag.key]}
-                    onChange={(next) => setFlag(flag.key, next)}
-                    label={flag.label}
-                    hint={flag.hint}
-                  />
-                ))}
-              </div>
-            </Field>
-          ))}
+        {/*
+          4 — context, collapsed.
+          Eleven pills always open pushed the checklist — the part that
+          actually scores the trade — below the fold on every capture. They
+          fold away with a count, so a trade that needs none of them costs no
+          scrolling at all.
+        */}
+        <div className="space-y-2">
+          {CONTEXT_GROUPS.map((group) => {
+            const on = group.flags.filter((f) => context[f.key]).length;
+            return (
+              <Disclosure
+                key={group.label}
+                label={`${group.label}${on ? `  ·  ${on} ticked` : ''}`}
+                defaultOpen={on > 0}
+              >
+                <div className="flex flex-wrap gap-2.5 pt-1">
+                  {group.flags.map((flag) => (
+                    <TogglePill
+                      key={flag.key}
+                      checked={context[flag.key]}
+                      onChange={(next) => setFlag(flag.key, next)}
+                      label={flag.label}
+                      hint={flag.hint}
+                    />
+                  ))}
+                </div>
+              </Disclosure>
+            );
+          })}
         </div>
 
         {/* 5 — the checklist, with the live score. */}
@@ -553,7 +561,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               </p>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               <Field label="Instrument"><Select value={instrument} onChange={setInstrument} options={INSTRUMENTS} /></Field>
               <Field label="Direction"><Select value={direction} onChange={setDirection} options={DIRECTIONS} /></Field>
               <Field label="Setup type"><Select value={setupType} onChange={setSetupType} options={SETUP_TYPES} /></Field>
@@ -562,7 +570,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               <Field label="Target type"><Select value={targetType} onChange={setTargetType} options={TARGET_TYPES} /></Field>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
                 <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
                   value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
@@ -570,25 +578,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               <Field label="Contracts">
                 <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
               </Field>
-              {/*
-                Dollars and percent are separate fields on purpose. A percentage
-                typed into the dollars box is not a small mistake: P&L is
-                risk x R, so a "-1.57" entered there turned a -1.9R loss into a
-                +$2.98 win. Negative values are now dropped on save.
-              */}
-              <Field label="Risk ($)" hint="Dollars risked. Not a percentage.">
-                <Input type="number" step="1" min="0" placeholder="—" value={riskDollars}
-                  onChange={(e) => setRiskDollars(e.target.value)} />
-              </Field>
-              <Field label="Risk (%)" hint="Optional — percent of the account.">
-                <Input type="number" step="0.01" min="0" inputMode="decimal" placeholder="—"
-                  value={riskPercent} onChange={(e) => setRiskPercent(e.target.value)} />
-              </Field>
-              {/*
-                The actual figure, which beats risk x R everywhere it is set.
-                Deriving it multiplies one estimate by another, and it is not
-                bounded by the risk: a -2R loss on $200 really is -$400.
-              */}
               <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
                 <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
                   value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
@@ -598,27 +587,13 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               </Field>
             </div>
 
-            {/* All optional — the chart already shows them. */}
-            <div className="grid gap-5 sm:grid-cols-3">
-              <Field label="Entry" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-                value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} /></Field>
-              <Field label="Take profit" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-                value={takeProfit} onChange={(e) => setTakeProfit(e.target.value)} /></Field>
-              <Field label="Stop loss" hint="Optional"><Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-                value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} /></Field>
-            </div>
-
             {/*
               Excursion. How far it went against me before it worked, and how
               far in my favour before it turned — the fastest way to learn
               whether the stop is too tight or the target too greedy, which no
               win rate will ever tell me.
             */}
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Entry time" hint="Optional"><Input type="time" value={entryTime}
-                onChange={(e) => setEntryTime(e.target.value)} /></Field>
-              <Field label="Exit time" hint="Optional"><Input type="time" value={exitTime}
-                onChange={(e) => setExitTime(e.target.value)} /></Field>
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="MAE (R)" hint="Worst it went against you. Negative.">
                 <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
                   value={maeR} onChange={(e) => setMaeR(e.target.value)} />

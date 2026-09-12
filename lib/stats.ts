@@ -4,7 +4,7 @@ import {
   type Account, type ChecklistKey, type MistakeTag, type Reason, type SkipReason,
   type TargetType,
 } from './domain';
-import { adherenceGap, derivedAdherence, type AdherenceGap } from './adherence';
+import { adherenceGap, adherenceOf, derivedAdherence, type AdherenceGap } from './adherence';
 import { GRADE_BUCKETS } from './grade';
 import { isMacroTime } from './macro';
 import type { Trade } from './types';
@@ -299,6 +299,8 @@ export interface Discipline {
   costOfBreaking: number;
   /** Taken without both Phase 3 answers — entries the plan says don't exist. */
   untriggered: Aggregate;
+  /** Checklist never filled in. Neither followed nor broken — just unknown. */
+  unscored: Aggregate;
   /** What I claimed against what the record shows. */
   gap: AdherenceGap;
   /** Share of trades where the derived answer is true. Null with no trades. */
@@ -306,11 +308,16 @@ export interface Discipline {
 }
 
 export function discipline(trades: Trade[]): Discipline {
-  // Derived, not self-reported. What I said about my own discipline is the
-  // weakest data in the journal — it is answered at the moment I am least able
-  // to be objective. The checklist and the mistake tags already know.
-  const followed = trades.filter((t) => derivedAdherence(t));
-  const broken = trades.filter((t) => !derivedAdherence(t));
+  /*
+    Derived, not self-reported — but only where there is something to derive
+    from. A trade whose checklist was never filled in is reported as unscored
+    rather than counted as a break: calling it one would assert something about
+    my behaviour from the absence of data, which is the same mistake as the
+    form defaulting "followed all rules" to yes.
+  */
+  const followed = trades.filter((t) => adherenceOf(t) === 'followed');
+  const broken = trades.filter((t) => adherenceOf(t) === 'broken');
+  const unscored = trades.filter((t) => adherenceOf(t) === 'unscored');
   const untriggered = trades.filter((t) => isTaken(t.outcome) && !t.trigger_fired);
 
   return {
@@ -318,9 +325,14 @@ export function discipline(trades: Trade[]): Discipline {
     broken: aggregate(broken),
     costOfBreaking: aggregate(broken).totalR,
     untriggered: aggregate(untriggered),
+    unscored: aggregate(unscored),
     gap: adherenceGap(trades),
-    /** The headline. The one number I fully control. */
-    adherenceRate: trades.length ? followed.length / trades.length : null,
+    // Out of the trades that actually have a verdict. Including unscored ones
+    // in the denominator would make the headline fall every time I logged a
+    // trade quickly, which is precisely the behaviour worth encouraging.
+    adherenceRate: (followed.length + broken.length)
+      ? followed.length / (followed.length + broken.length)
+      : null,
   };
 }
 

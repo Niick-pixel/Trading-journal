@@ -40,7 +40,14 @@ export default async function NewTradePage({
       <div className="relative flex h-dvh flex-col">
         <TitleBar />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[42rem] px-6 pb-20 pt-4">
+          {/*
+            Wide, and dynamic with the window.
+            The form grew past what a single 42rem column could hold without
+            becoming a scroll marathon. It now uses whatever width the window
+            gives it, up to a readable ceiling, and the card inside lays its
+            sections out in one, two or three columns to match.
+          */}
+          <div className="mx-auto w-full max-w-[96rem] px-4 pb-20 pt-4 sm:px-6">
             <NewTradeForm trade={trade ?? undefined} />
           </div>
         </div>

@@ -1,14 +1,18 @@
-import { TAKE_IT_THRESHOLD } from './domain';
+import { TAKE_IT_THRESHOLD, isScored, type ChecklistKey } from './domain';
 
 /**
  * Everything the derivation needs, and nothing else — so it can be computed
  * from a saved row, from a half-filled form, or from an imported record.
  */
-export interface AdherenceInput {
+/**
+ * Everything the derivation needs — the nine checklist answers included, so
+ * "was this scored at all" is computed here rather than trusted from a caller.
+ */
+export type AdherenceInput = {
   trigger_fired: boolean;
   checklist_score: number;
-  mistake_tags: string[];
-}
+  mistake_tags: readonly string[];
+} & Partial<Record<ChecklistKey, boolean>>;
 
 /**
  * Whether the rules were actually followed, computed rather than asked.
@@ -22,10 +26,33 @@ export interface AdherenceInput {
  * the trigger never fired, and it can have fired with a 95 and still be a rule
  * break if I moved the stop afterwards.
  */
-export function derivedAdherence(t: AdherenceInput): boolean {
+export type Adherence = 'followed' | 'broken' | 'unscored';
+
+/**
+ * Whether the rules were followed, computed rather than asked.
+ *
+ * Three outcomes, not two. A trade whose checklist was never filled in is
+ * NOT a rule break — it is a trade I did not score, and calling it a break
+ * asserts something about my behaviour from the absence of data. That is the
+ * same mistake as the form defaulting "followed all rules" to yes, pointing
+ * the other way: silence read as a verdict.
+ *
+ * Once the checklist HAS been answered, all three conditions have to hold. A
+ * trade can score 100 and still be a break if the trigger never fired, and it
+ * can have fired at 95 and still be a break if I moved the stop afterwards.
+ */
+export function adherenceOf(t: AdherenceInput): Adherence {
+  if (!isScored(t)) return 'unscored';
   return t.trigger_fired
     && t.checklist_score >= TAKE_IT_THRESHOLD
-    && t.mistake_tags.length === 0;
+    && t.mistake_tags.length === 0
+    ? 'followed'
+    : 'broken';
+}
+
+/** Convenience for the places that only care about a clean pass. */
+export function derivedAdherence(t: AdherenceInput): boolean {
+  return adherenceOf(t) === 'followed';
 }
 
 /**
@@ -59,7 +86,8 @@ export function adherenceGap(
   let unanswered = 0;
 
   for (const t of trades) {
-    if (t.followed_rules === null) { unanswered += 1; continue; }
+    // No self-report, or nothing to compare it against.
+    if (t.followed_rules === null || adherenceOf(t) === 'unscored') { unanswered += 1; continue; }
     const derived = derivedAdherence(t);
     if (t.followed_rules === derived) agreed += 1;
     else if (t.followed_rules) overclaimed += 1;
