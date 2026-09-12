@@ -255,4 +255,23 @@ export interface TradeFilters {
   bin?: 'live' | 'trash' | 'all';
 }
 
-export const MIN_EXPLANATION = 80;
+/**
+ * How much you have to write before a trade counts as recorded.
+ *
+ * Doubled from 80. Eighty characters is one sentence, and one sentence is a
+ * label — "took the iFVG, it worked". A hundred and sixty forces a second
+ * thought, and the second thought is the entire reason this file exists.
+ *
+ * Enforced in the app rather than in the schema. The database CHECK stays at
+ * its original floor because trades already written under the old rule are
+ * still true, and a stricter constraint would reject them on their next edit.
+ */
+export const MIN_EXPLANATION = 160;
+
+/**
+ * Same floor for the lesson, but only once the trade has an outcome.
+ *
+ * Demanding a lesson from a trade that has not happened yet is asking for
+ * fiction, so a Planned entry is exempt until it settles.
+ */
+export const MIN_LESSON = 160;

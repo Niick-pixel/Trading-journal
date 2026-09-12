@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { spring, springSoft } from '@/lib/motion';
+import { spring, springSoft, scrimExit } from '@/lib/motion';
 import { search, type Hit } from '@/lib/search';
 import { reasonAccent } from '@/lib/layout';
 import type { Trade } from '@/lib/types';
@@ -52,7 +52,9 @@ export function SearchPalette({ trades, open, onClose, onOpenTrade }: {
       {open && (
         <>
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, pointerEvents: 'none', transition: scrimExit }}
             transition={spring}
             onClick={onClose}
             className="fixed inset-0 z-[70]"

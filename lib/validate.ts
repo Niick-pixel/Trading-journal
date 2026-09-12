@@ -4,7 +4,7 @@ import {
   TARGET_TYPES, TRADE_STATUSES,
   type ChecklistKey, type ContextFlag, type MistakeTag, type Tri,
 } from './domain';
-import { MIN_EXPLANATION, type TradeInput } from './types';
+import { MIN_EXPLANATION, MIN_LESSON, type TradeInput } from './types';
 
 /**
  * Validates a trade payload before it reaches SQLite. The CHECK constraints in
@@ -50,6 +50,20 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
   const explanation = typeof t.explanation === 'string' ? t.explanation.trim() : '';
   if (explanation.length < MIN_EXPLANATION) {
     return { ok: false, error: `The explanation needs at least ${MIN_EXPLANATION} characters.` };
+  }
+
+  /*
+    A lesson is required once the trade has a result to learn from. Planned
+    entries are exempt: there is nothing to conclude yet, and a forced
+    conclusion about a trade that has not happened is worse than none.
+  */
+  const lesson = typeof t.lesson === 'string' ? t.lesson.trim() : '';
+  const planned = t.status === 'Planned';
+  if (!planned && lesson.length < MIN_LESSON) {
+    return {
+      ok: false,
+      error: `The lesson needs at least ${MIN_LESSON} characters — what would you do differently?`,
+    };
   }
 
   const screenshot_path = typeof t.screenshot_path === 'string' ? t.screenshot_path : '';
@@ -136,7 +150,7 @@ export function parseTradeInput(raw: unknown): { ok: true; value: TradeInput } |
       outcome: outcome!,
       r_multiple: numOrNull('r_multiple'),
       explanation,
-      lesson: typeof t.lesson === 'string' && t.lesson.trim() ? t.lesson.trim() : null,
+      lesson: lesson || null,
       screenshot_path,
     },
   };

@@ -10,14 +10,16 @@ interface ExplanationFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  /** Optional fields (the lesson) drop the counter and the minimum. */
+  /** An optional field drops the counter and the minimum. */
   required?: boolean;
+  /** The floor this particular field has to clear. */
+  minChars?: number;
   minRows?: number;
 }
 
 /** Auto-growing textarea with a character counter that earns its keep. */
 export function ExplanationField({
-  value, onChange, placeholder, required = true, minRows = 4,
+  value, onChange, placeholder, required = true, minChars = MIN_EXPLANATION, minRows = 4,
 }: ExplanationFieldProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const glow = useGlowState();
@@ -31,7 +33,7 @@ export function ExplanationField({
   }, [value]);
 
   const length = value.trim().length;
-  const remaining = MIN_EXPLANATION - length;
+  const remaining = minChars - length;
   const met = remaining <= 0;
 
   return (
@@ -62,7 +64,7 @@ export function ExplanationField({
           >
             {met ? 'Minimum met' : `${remaining} more character${remaining === 1 ? '' : 's'}`}
           </motion.span>
-          <span style={{ color: 'var(--text-faint)' }}>{length} / {MIN_EXPLANATION}</span>
+          <span style={{ color: 'var(--text-faint)' }}>{length} / {minChars}</span>
         </div>
       )}
     </div>

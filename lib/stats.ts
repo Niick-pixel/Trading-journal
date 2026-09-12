@@ -694,37 +694,24 @@ export function whenHeatmap(trades: Trade[]): HeatCell[] {
 }
 
 /**
- * Excursion: how far against me before it worked, how far in favour before it
- * turned, and how many losers touched +1R on the way.
+ * Whether the losers were ever winners.
+ *
+ * MAE and MFE used to live here too. They were removed: filling in two decimal
+ * numbers per trade is real work, and nothing was ever read off them that this
+ * one boolean does not already say more directly.
  */
 export interface Excursion {
-  n: number;
-  avgMaeWinners: number | null;
-  avgMaeLosers: number | null;
-  avgMfeWinners: number | null;
-  avgMfeLosers: number | null;
-  /** Losers that reached +1R first. Management, not selection. */
-  losersThatReached1R: number;
+  /** Losers where the question was actually answered. */
   losersWithData: number;
+  losersThatReached1R: number;
 }
 
 export function excursion(trades: Trade[]): Excursion {
-  const taken = trades.filter((t) => isTaken(t.outcome));
-  const winners = taken.filter((t) => t.outcome === 'Win');
-  const losers = taken.filter((t) => t.outcome === 'Loss');
-  const mean = (list: Trade[], key: 'mae_r' | 'mfe_r') => {
-    const vals = list.map((t) => t[key]).filter((v): v is number => v != null);
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-  };
-  const losersWithData = losers.filter((t) => t.reached_1r != null);
+  const losers = trades.filter((t) => isTaken(t.outcome) && t.outcome === 'Loss');
+  const withData = losers.filter((t) => t.reached_1r != null);
   return {
-    n: taken.filter((t) => t.mae_r != null || t.mfe_r != null).length,
-    avgMaeWinners: mean(winners, 'mae_r'),
-    avgMaeLosers: mean(losers, 'mae_r'),
-    avgMfeWinners: mean(winners, 'mfe_r'),
-    avgMfeLosers: mean(losers, 'mfe_r'),
-    losersThatReached1R: losersWithData.filter((t) => t.reached_1r === true).length,
-    losersWithData: losersWithData.length,
+    losersWithData: withData.length,
+    losersThatReached1R: withData.filter((t) => t.reached_1r === true).length,
   };
 }
 

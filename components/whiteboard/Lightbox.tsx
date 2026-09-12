@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { spring } from '@/lib/motion';
+import { spring, scrimExit } from '@/lib/motion';
 
 const STEPS = [1, 1.5, 2, 3, 4] as const;
 
@@ -60,7 +60,9 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, caption }: Lightbo
     <AnimatePresence>
       {src && (
         <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, pointerEvents: 'none', transition: scrimExit }}
           transition={spring}
           // Above the detail panel, which is already at z-50.
           className="fixed inset-0 z-[80] grid place-items-center"

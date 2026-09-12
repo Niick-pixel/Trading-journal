@@ -35,3 +35,14 @@ export const stagger = (index: number): Transition => ({
   ...springSnappy,
   delay: index * 0.018,
 });
+
+/**
+ * How a scrim leaves.
+ *
+ * A dimming layer is a modal's only job while it is up, and dead weight the
+ * instant it is not. On a spring its exit ran for well over a second, during
+ * which it still swallowed every click — press Escape and the board underneath
+ * was inert for a beat. Overlays fade out fast and stop taking the pointer the
+ * moment they start leaving.
+ */
+export const scrimExit = { duration: 0.12, ease: 'easeOut' } as const;

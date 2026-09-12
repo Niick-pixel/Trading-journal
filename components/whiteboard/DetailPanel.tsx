@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CHECKLIST_PHASES, CONTEXT_FLAG_LIST, OUTCOMES, type Outcome } from '@/lib/domain';
 import { GRADE_MAX } from '@/lib/grade';
-import { spring, springSoft } from '@/lib/motion';
+import { spring, springSoft, scrimExit } from '@/lib/motion';
 import { derivedAdherence } from '@/lib/adherence';
 import type { Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -132,7 +132,9 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
       {trade && (
         <>
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, pointerEvents: 'none', transition: scrimExit }}
             transition={spring}
             onClick={onClose}
             className="fixed inset-0 z-40"

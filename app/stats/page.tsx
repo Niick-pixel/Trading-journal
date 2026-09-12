@@ -548,28 +548,30 @@ export default async function StatsPage(
                 </Panel>
 
                 <Panel
-                  title="How far it moved against you"
-                  note="Excursion. If most losers touched +1R first, the problem is management rather than selection — and no win rate will ever tell you that."
+                  title="Management or selection?"
+                  note="Whether the losers were ever winners. If most of them were up a full R before stopping out, the entries were fine and the exits were not — and no win rate will ever tell you that."
                 >
-                  {exc.n === 0 ? (
+                  {exc.losersWithData === 0 ? (
                     <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                      No MAE or MFE recorded yet. Both are optional fields on the trade form.
+                      Nothing recorded yet. &ldquo;Reached +1R before the stop?&rdquo; is an optional
+                      question on the trade form.
                     </p>
                   ) : (
                     <>
-                      <Line label="Avg MAE on winners" value={r2(exc.avgMaeWinners)} />
-                      <Line label="Avg MAE on losers" value={r2(exc.avgMaeLosers)} tone="loss" />
-                      <Line label="Avg MFE on winners" value={r2(exc.avgMfeWinners)} tone="win" />
-                      <Line label="Avg MFE on losers" value={r2(exc.avgMfeLosers)} />
                       <Line
                         label="Losers that reached +1R first"
-                        value={exc.losersWithData ? `${exc.losersThatReached1R} of ${exc.losersWithData}` : '—'}
-                        tone={exc.losersThatReached1R > exc.losersWithData / 2 ? 'loss' : null}
+                        value={`${exc.losersThatReached1R} of ${exc.losersWithData}`}
+                        tone={exc.losersThatReached1R > exc.losersWithData / 2 ? 'loss' : 'win'}
                       />
-                      {exc.losersWithData > 0 && exc.losersThatReached1R > exc.losersWithData / 2 && (
+                      {exc.losersThatReached1R > exc.losersWithData / 2 ? (
                         <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
                           More than half your losers were up a full R before they stopped you out. That is
                           a management problem, not a selection one.
+                        </p>
+                      ) : (
+                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                          Most losers never went your way. Those are selection, not management — the exits
+                          are not what is costing you.
                         </p>
                       )}
                     </>

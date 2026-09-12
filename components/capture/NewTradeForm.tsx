@@ -15,7 +15,7 @@ import { GRADE_MAX, checklistScore, triggerFired } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
-import { MIN_EXPLANATION, type Trade } from '@/lib/types';
+import { MIN_EXPLANATION, MIN_LESSON, type Trade } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { Field, Input } from '@/components/ui/Field';
@@ -71,8 +71,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const [accountLabel, setAccountLabel] = useState(trade?.account_label ?? '');
   const [status, setStatus] = useState<TradeStatus>(trade?.status ?? 'Settled');
   const [pnlDollars, setPnlDollars] = useState(trade?.pnl_dollars?.toString() ?? '');
-  const [maeR, setMaeR] = useState(trade?.mae_r?.toString() ?? '');
-  const [mfeR, setMfeR] = useState(trade?.mfe_r?.toString() ?? '');
   const [reached1R, setReached1R] = useState<Tri>(trade?.reached_1r ?? null);
   const [confidence, setConfidence] = useState<number | null>(trade?.confidence_at_entry ?? null);
   const [wouldBeR, setWouldBeR] = useState(trade?.would_be_r?.toString() ?? '');
@@ -121,13 +119,13 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
     date, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
     context, checks, followedRules, mistakeTags, account, accountLabel, status,
-    contracts, pnlDollars, stopPoints, rMultiple, maeR, mfeR,
+    contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, confidence, wouldBeR, macroOverride,
   }), [
     date, instrument, direction, session, reason, setupType, htfBias,
     premiumDiscount, targetType, outcome, explanation, lesson,
     context, checks, followedRules, mistakeTags, account, accountLabel, status,
-    contracts, pnlDollars, stopPoints, rMultiple, maeR, mfeR,
+    contracts, pnlDollars, stopPoints, rMultiple,
     reached1R, confidence, wouldBeR, macroOverride,
   ]);
 
@@ -168,8 +166,6 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
     if (has('pnlDollars')) setPnlDollars(v.pnlDollars);
     if (has('stopPoints')) setStopPoints(v.stopPoints);
     if (has('rMultiple')) setRMultiple(v.rMultiple);
-    if (has('maeR')) setMaeR(v.maeR);
-    if (has('mfeR')) setMfeR(v.mfeR);
     if (has('reached1R')) setReached1R(v.reached1R);
     if (has('confidence')) setConfidence(v.confidence);
     if (has('wouldBeR')) setWouldBeR(v.wouldBeR);
@@ -211,7 +207,10 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const planned = status === 'Planned';
   const accent = reason ? reasonAccent(reason) : 'var(--accent)';
   const explanationOk = explanation.trim().length >= MIN_EXPLANATION;
-  const canSubmit = (Boolean(file) || editing) && Boolean(reason) && explanationOk && !submitting;
+  // A Planned trade has no result to learn from, so it is not asked for one.
+  const lessonOk = planned || lesson.trim().length >= MIN_LESSON;
+  const canSubmit = (Boolean(file) || editing)
+    && Boolean(reason) && explanationOk && lessonOk && !submitting;
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
 
@@ -260,7 +259,10 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       stop_points: num(stopPoints),
       entry_time: trade?.entry_time ?? null,
       exit_time: trade?.exit_time ?? null,
-      mae_r: num(maeR), mfe_r: num(mfeR), mae_points: null, mfe_points: null,
+      // Asked for and then removed: the two numbers were a chore to fill in and
+      // nothing was read off them. Older records keep whatever they hold.
+      mae_r: trade?.mae_r ?? null, mfe_r: trade?.mfe_r ?? null,
+      mae_points: null, mfe_points: null,
       reached_1r: reached1R,
       confidence_at_entry: confidence,
       would_be_r: num(wouldBeR),
@@ -360,7 +362,36 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         </motion.div>
       )}
 
-      <div className="space-y-8">
+      {/*
+        Columns where there is room for them.
+
+        The form had grown to a single tall strip: logging one trade meant four
+        or five screens of scrolling, and the checklist — the part that actually
+        scores the trade — was always the furthest away. Setup, the writing and
+        the checklist are three separate trains of thought, so they sit side by
+        side rather than stacked.
+
+        At 1280px each gets its own column. Between 1024 and 1280 there is only
+        room for two, so the writing — the tallest of the three by far — takes
+      {/*
+        Three columns of thought, not one tall strip.
+
+        Logging a trade used to mean four or five screens of scrolling, and the
+        checklist — the part that actually scores the trade — was always the
+        furthest away. The form now sorts itself into three trains of thought
+        that sit side by side: what the trade WAS on the left, what you have to
+        SAY about it in the middle, and what it SCORES on the right. The old
+        "Details" heap is gone; every field in it now lives beside the thing it
+        describes, which is both shorter and easier to read.
+
+        At 1280px each train gets its own column. Between 1024 and 1280 there is
+        room for two, so the writing — the tallest of the three — takes the
+        right-hand one for both rows while the trade and the score stack down
+        the left; auto-placement would instead have parked the score below both
+        and left a column of dead space. Below 1024px it is one column again.
+      */}
+      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-2 lg:gap-y-7 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)] xl:gap-y-6">
+        <div className="space-y-7 lg:col-start-1 lg:row-start-1 xl:col-auto xl:row-auto">
         {/* 1 — how it ended. You already know this before you start typing, and
             burying it behind a disclosure made it the last thing recorded. */}
         {/*
@@ -368,7 +399,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           backtest R and live R summing into one number would make every other
           figure in the app a lie.
         */}
-        <div className="mb-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mb-7 grid gap-5 sm:grid-cols-2">
           <Field label="Account" hint="Backtest R and live R never sum into the same number.">
             <Select value={account} onChange={setAccount} options={ACCOUNTS} />
           </Field>
@@ -381,13 +412,14 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           Two-stage logging is available, never required. 'Settled' stays the
           default so a finished trade can still be written in one pass.
         */}
-        <Field
-          label="Stage"
-          hint="Planned hides the outcome until you settle it, and freezes the grade you gave it before you knew."
-          className="mb-7"
-        >
-          <Segmented value={status} onChange={setStatus} options={TRADE_STATUSES} />
-        </Field>
+        <div className="mb-7">
+          <Field
+            label="Stage"
+            hint="Planned hides the outcome until you settle it, and freezes the grade you gave it before you knew."
+          >
+            <Segmented value={status} onChange={setStatus} options={TRADE_STATUSES} />
+          </Field>
+        </div>
 
         {/* A Planned trade has no outcome yet, so it is not asked for. */}
         <AnimatePresence initial={false}>
@@ -427,11 +459,54 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
         </AnimatePresence>
 
         {/* 2 — the chart. */}
+        <div>
         <ScreenshotDropzone
           file={file}
           onFile={setFile}
           existingUrl={trade ? `/api/screenshots/${trade.screenshot_path}` : null}
         />
+        </div>
+
+        {/* The passed-setup questions belong here, the moment "Not taken"
+            is chosen — not four sections further down. */}
+        {/* Only meaningful for a setup you passed on — the plan calls this
+            the most important thing in the whole file. */}
+        <AnimatePresence>
+          {outcome === 'Not taken' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={springSoft}
+              className="overflow-hidden"
+            >
+              <div className="space-y-5 pt-1">
+                <Field label="Would it have hit TP?" hint="Go back and check. Guessing defeats the point.">
+                  <Segmented
+                    value={wouldHaveHitTp === null ? 'Unknown' : wouldHaveHitTp ? 'Yes' : 'No'}
+                    onChange={(v) => setWouldHaveHitTp(v === 'Unknown' ? null : v === 'Yes')}
+                    options={['Yes', 'No', 'Unknown'] as const}
+                    accentFor={(v) => (v === 'Yes' ? 'var(--outcome-win)' : v === 'No' ? 'var(--outcome-loss)' : 'var(--outcome-neutral)')}
+                  />
+                </Field>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field label="What it would have paid (R)" hint="Go and check. A guess here is worse than a blank.">
+                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                      value={wouldBeR} onChange={(e) => setWouldBeR(e.target.value)} />
+                  </Field>
+                  <Field label="R left on the table">
+                    <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+                      value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />
+                  </Field>
+                  <Field label="Real reason" hint="Not the story — the reason.">
+                    <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
+                  </Field>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
 
         {/* 2 — reason, before anything else. */}
         <Field label="Why did you take it" hint="Answer honestly. Nothing else in this app works if this is wrong.">
@@ -444,22 +519,43 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           />
         </Field>
 
-        {/* 3 — the writing. */}
-        <Field label="Explanation">
-          <ExplanationField
-            value={explanation}
-            onChange={setExplanation}
-            placeholder="What did you see, what did you expect, and what made you click the button?"
-          />
-        </Field>
 
-        {/*
-          4 — context, collapsed.
-          Eleven pills always open pushed the checklist — the part that
-          actually scores the trade — below the fold on every capture. They
-          fold away with a count, so a trade that needs none of them costs no
-          scrolling at all.
-        */}
+        {/* When it happened, and on what. Facts about the trade, so they sit
+            with the trade rather than in a heap at the bottom. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Date & time">
+            <Input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Session">
+            <Select value={session} onChange={setSession} options={SESSIONS} />
+          </Field>
+        </div>
+
+        <div>
+          <TogglePill
+            checked={macroTime}
+            onChange={(next) => setMacroOverride(next === (derivedWindow !== null) ? null : next)}
+            label={derivedWindow ? `Macro time (${derivedWindow})` : 'Macro time'}
+            accent="var(--accent)"
+          />
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+            {derivedWindow
+              ? `The entry time falls inside the ${derivedWindow} macro — tick it if that mattered.`
+              : 'The entry time is outside both macro windows.'}
+          </p>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Instrument"><Select value={instrument} onChange={setInstrument} options={INSTRUMENTS} /></Field>
+          <Field label="Direction"><Select value={direction} onChange={setDirection} options={DIRECTIONS} /></Field>
+          <Field label="Setup type"><Select value={setupType} onChange={setSetupType} options={SETUP_TYPES} /></Field>
+          <Field label="HTF bias"><Select value={htfBias} onChange={setHtfBias} options={HTF_BIASES} /></Field>
+          <Field label="Premium / discount"><Select value={premiumDiscount} onChange={setPremiumDiscount} options={PREMIUM_DISCOUNTS} /></Field>
+          <Field label="Target type"><Select value={targetType} onChange={setTargetType} options={TARGET_TYPES} /></Field>
+        </div>
+
+        {/* Context flags, folded away with a count: a trade that needs none of
+            them costs no height at all. */}
         <div className="space-y-2">
           {CONTEXT_GROUPS.map((group) => {
             const on = group.flags.filter((f) => context[f.key]).length;
@@ -484,7 +580,89 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
             );
           })}
         </div>
+        </div>
 
+        <div className="space-y-7 lg:col-start-2 lg:row-start-1 lg:row-span-2 xl:col-auto xl:row-auto xl:row-span-1">
+        {/* 3 — the writing. */}
+        <Field label="Explanation">
+          <ExplanationField
+            value={explanation}
+            onChange={setExplanation}
+            minChars={MIN_EXPLANATION}
+            minRows={8}
+            placeholder="What did you see, what did you expect, and what made you click the button?"
+          />
+        </Field>
+
+        {/*
+          3b — the lesson, beside the explanation and just as demanding.
+          What happened and what to do about it are two different thoughts, and
+          only the second one changes anything. Not asked of a Planned trade:
+          there is no outcome to draw a lesson from yet.
+        */}
+        {!planned && (
+          <Field
+            label="Lesson"
+            hint={`What would you do differently? At least ${MIN_LESSON} characters — a label is not a lesson.`}
+          >
+            <ExplanationField
+              value={lesson}
+              onChange={setLesson}
+              required
+              minChars={MIN_LESSON}
+              minRows={8}
+              placeholder="Next time: the sweep was there but I took it before the candle closed. Wait for the close, even when it looks like it is leaving without me."
+            />
+          </Field>
+        )}
+
+
+        {/* The numbers, then the reckoning. These belong next to the lesson:
+            what it paid and what went wrong are the same conversation. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
+            <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
+              value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
+          </Field>
+          <Field label="Contracts">
+            <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
+          </Field>
+          <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
+            <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
+              value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
+          </Field>
+          <Field label="Stop (points)" hint="Optional — it is on the screenshot.">
+            <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
+          </Field>
+        </div>
+
+        {/*
+          Excursion. How far it went against me before it worked, and how
+          far in my favour before it turned — the fastest way to learn
+          whether the stop is too tight or the target too greedy, which no
+          win rate will ever tell me.
+        */}
+        <TriState
+          value={reached1R}
+          onChange={setReached1R}
+          label="Reached +1R before the stop?"
+          hint="If most of your losers did, the problem is management rather than selection."
+        />
+
+        {/* After the close: the honest part. */}
+        <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
+          <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
+        </Field>
+
+        <Field
+          label="What went wrong"
+          hint="Pick every one that applies. A bad trade usually has three."
+        >
+          <TagPicker value={mistakeTags} onChange={setMistakeTags} />
+        </Field>
+        </div>
+
+        <div className="space-y-7 lg:col-start-1 lg:row-start-2 xl:col-auto xl:row-auto">
         {/* 5 — the checklist, with the live score. */}
         <div>
           <span className="mb-4 block text-[11px] font-medium uppercase tracking-[0.07em]"
@@ -527,166 +705,39 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
               </div>
             </Field>
           </div>
-        </div>
 
-        {/* 6 — the rest. Not hidden behind a disclosure any more: every one of
-            these is part of the record, and a collapsed section is a section
-            that quietly stays empty. */}
-        <div>
-          <span className="mb-4 block text-[11px] font-medium uppercase tracking-[0.07em]"
-            style={{ color: 'var(--text-faint)' }}>
-            Details
-          </span>
-          <div className="space-y-6">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Date & time">
-                <Input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
-              </Field>
-              <Field label="Session">
-                <Select value={session} onChange={setSession} options={SESSIONS} />
-              </Field>
-            </div>
-
-            <div>
-              <TogglePill
-                checked={macroTime}
-                onChange={(next) => setMacroOverride(next === (derivedWindow !== null) ? null : next)}
-                label={derivedWindow ? `Macro time (${derivedWindow})` : 'Macro time'}
-                accent="var(--accent)"
-              />
-              <p className="mt-2 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                {derivedWindow
-                  ? `The entry time falls inside the ${derivedWindow} macro — tick it if that mattered.`
-                  : 'The entry time is outside both macro windows.'}
-              </p>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              <Field label="Instrument"><Select value={instrument} onChange={setInstrument} options={INSTRUMENTS} /></Field>
-              <Field label="Direction"><Select value={direction} onChange={setDirection} options={DIRECTIONS} /></Field>
-              <Field label="Setup type"><Select value={setupType} onChange={setSetupType} options={SETUP_TYPES} /></Field>
-              <Field label="HTF bias"><Select value={htfBias} onChange={setHtfBias} options={HTF_BIASES} /></Field>
-              <Field label="Premium / discount"><Select value={premiumDiscount} onChange={setPremiumDiscount} options={PREMIUM_DISCOUNTS} /></Field>
-              <Field label="Target type"><Select value={targetType} onChange={setTargetType} options={TARGET_TYPES} /></Field>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              <Field label="R multiple" hint="Signed, e.g. 2.4 or -1. Leave blank to settle later.">
-                <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                  value={rMultiple} onChange={(e) => setRMultiple(e.target.value)} />
-              </Field>
-              <Field label="Contracts">
-                <Input type="number" step="1" min="0" placeholder="—" value={contracts} onChange={(e) => setContracts(e.target.value)} />
-              </Field>
-              <Field label="P&L ($)" hint="What the account actually did. Signed — a loss is negative.">
-                <Input type="number" step="0.01" inputMode="decimal" placeholder="—"
-                  value={pnlDollars} onChange={(e) => setPnlDollars(e.target.value)} />
-              </Field>
-              <Field label="Stop (points)" hint="Optional — it is on the screenshot.">
-                <Input type="number" step="0.25" min="0" placeholder="—" value={stopPoints} onChange={(e) => setStopPoints(e.target.value)} />
-              </Field>
-            </div>
-
-            {/*
-              Excursion. How far it went against me before it worked, and how
-              far in my favour before it turned — the fastest way to learn
-              whether the stop is too tight or the target too greedy, which no
-              win rate will ever tell me.
-            */}
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              <Field label="MAE (R)" hint="Worst it went against you. Negative.">
-                <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                  value={maeR} onChange={(e) => setMaeR(e.target.value)} />
-              </Field>
-              <Field label="MFE (R)" hint="Best it got before it turned.">
-                <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                  value={mfeR} onChange={(e) => setMfeR(e.target.value)} />
-              </Field>
-            </div>
-
-            <TriState
-              value={reached1R}
-              onChange={setReached1R}
-              label="Reached +1R before the stop?"
-              hint="If most of your losers did, the problem is management rather than selection."
-            />
-
-            {/* After the close: the honest part. */}
-            <Field label="Honest re-grade" hint="After the close, and allowed to be harsher than before it.">
-              <Select value={regrade} onChange={setRegrade} options={REGRADES} placeholder="Not re-graded yet" />
-            </Field>
-
-            <Field
-              label="What went wrong"
-              hint="Pick every one that applies. A bad trade usually has three."
-            >
-              <TagPicker value={mistakeTags} onChange={setMistakeTags} />
-            </Field>
-
+          {/*
+            Directly under the score, deliberately. The checklist is what the
+            stats read; this is what you believe about yourself. Side by side,
+            the gap between the two is impossible to miss — which is the whole
+            reason the app records both.
+          */}
+          <div className="mt-6">
             <TriState
               value={followedRules}
               onChange={setFollowedRules}
               label="Followed ALL rules"
               hint="Max 2 trades, stop after 2 losses, no revenge, size within 1%. Leave it unset rather than guessing — stats read the checklist, not this answer."
             />
-
-            {/* Only meaningful for a setup you passed on — the plan calls this
-                the most important thing in the whole file. */}
-            <AnimatePresence>
-              {outcome === 'Not taken' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={springSoft}
-                  className="overflow-hidden"
-                >
-                  <div className="space-y-5 pt-1">
-                    <Field label="Would it have hit TP?" hint="Go back and check. Guessing defeats the point.">
-                      <Segmented
-                        value={wouldHaveHitTp === null ? 'Unknown' : wouldHaveHitTp ? 'Yes' : 'No'}
-                        onChange={(v) => setWouldHaveHitTp(v === 'Unknown' ? null : v === 'Yes')}
-                        options={['Yes', 'No', 'Unknown'] as const}
-                        accentFor={(v) => (v === 'Yes' ? 'var(--outcome-win)' : v === 'No' ? 'var(--outcome-loss)' : 'var(--outcome-neutral)')}
-                      />
-                    </Field>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field label="What it would have paid (R)" hint="Go and check. A guess here is worse than a blank.">
-                        <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                          value={wouldBeR} onChange={(e) => setWouldBeR(e.target.value)} />
-                      </Field>
-                      <Field label="R left on the table">
-                        <Input type="number" step="0.1" inputMode="decimal" placeholder="—"
-                          value={rLeftOnTable} onChange={(e) => setRLeftOnTable(e.target.value)} />
-                      </Field>
-                      <Field label="Real reason" hint="Not the story — the reason.">
-                        <Select value={skipReason} onChange={setSkipReason} options={SKIP_REASONS} placeholder="Why really?" />
-                      </Field>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <Field label="Lesson" hint="Optional — what you would do differently.">
-              <ExplanationField value={lesson} onChange={setLesson} required={false} minRows={3}
-                placeholder="What would you do differently?" />
-            </Field>
           </div>
         </div>
+        </div>
       </div>
+
 
       <div className="mt-9 flex items-center justify-between gap-5">
         <div className="min-w-0 text-[12px]" style={{ color: 'var(--text-faint)' }}>
           <AnimatePresence mode="wait">
             <motion.span
-              key={!file && !editing ? 'file' : !reason ? 'reason' : !explanationOk ? 'expl' : 'ready'}
+              key={!file && !editing ? 'file' : !reason ? 'reason'
+                : !explanationOk ? 'expl' : !lessonOk ? 'lesson' : 'ready'}
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
               transition={spring} className="block truncate"
             >
               {!file && !editing ? 'A screenshot is required.'
                 : !reason ? 'Name your motive to continue.'
                 : !explanationOk ? `${MIN_EXPLANATION - explanation.trim().length} more characters of explanation.`
+                : !lessonOk ? `${MIN_LESSON - lesson.trim().length} more characters of lesson.`
                 : 'Ready.'}
             </motion.span>
           </AnimatePresence>
