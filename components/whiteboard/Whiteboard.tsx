@@ -201,17 +201,20 @@ function WhiteboardInner({ trades: initial, readOnly = false }: { trades: Trade[
 
   const nodes = useMemo<Node[]>(() => {
     /*
-      The root. Centred over the clusters and placed above the highest one, so
-      it reads as the thing they all hang from rather than as another card.
-    */
-    const spanLeft = Math.min(...layout.clusters.map((c) => c.x), 0);
-    const spanRight = Math.max(...layout.clusters.map((c) => c.x + c.width), 0);
-    const topY = Math.min(...layout.clusters.map((c) => c.y), 0);
+      The root. Centred over the arrangement and above it, so it reads as the
+      thing the groups hang from rather than as another card.
 
+      Centred on the width the GRID asked for, not on the bounding box of the
+      clusters as drawn. Those regions are computed around wherever their cards
+      actually sit, so the box changes by a pixel or two every time any card is
+      nudged — and the title, anchored to it, slid a little on every single
+      drag. Nothing else on the board moves when you move one card, and the
+      title should not either.
+    */
     const titleNode: Node[] = layout.clusters.length === 0 ? [] : [{
       id: 'board-title',
       type: 'title',
-      position: { x: (spanLeft + spanRight) / 2 - 150, y: topY - 200 },
+      position: { x: layout.nominalWidth / 2 - 150, y: -200 },
       data: {
         label: GROUP_LABELS[groupMode],
         sub: `${layout.clusters.length} group${layout.clusters.length === 1 ? '' : 's'} · ${visible.length} trade${visible.length === 1 ? '' : 's'}`,

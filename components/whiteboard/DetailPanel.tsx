@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CHECKLIST_PHASES, CONTEXT_FLAG_LIST, OUTCOMES, type Outcome } from '@/lib/domain';
-import { GRADE_MAX } from '@/lib/grade';
+import {
+  CHECKLIST_PHASES, CONTEXT_FLAG_LIST, OUTCOMES,
+  type ChecklistAnswer, type Outcome,
+} from '@/lib/domain';
 import { spring, springSoft, scrimExit } from '@/lib/motion';
 import { derivedAdherence } from '@/lib/adherence';
 import type { Trade } from '@/lib/types';
@@ -43,15 +45,22 @@ function Group({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Check({ on, label }: { on: boolean; label: string }) {
+/**
+ * One checklist answer. `null` is not a miss — it is a condition that did not
+ * apply, shown struck through so it reads as removed from the mark rather than
+ * failed against it.
+ */
+function Check({ on, label }: { on: ChecklistAnswer; label: string }) {
+  const na = on === null;
   return (
     <span className="flex items-center gap-1.5 text-[11px]"
-      style={{ color: on ? 'rgb(var(--grade-aplus))' : 'var(--text-faint)' }}>
+      style={{ color: on === true ? 'rgb(var(--grade-aplus))' : 'var(--text-faint)' }}>
       <span className="grid size-[14px] place-items-center rounded-full text-[8px]"
-        style={{ background: on ? 'rgb(var(--grade-aplus) / 0.18)' : 'var(--glass-fill)' }}>
-        {on ? '✓' : '·'}
+        style={{ background: on === true ? 'rgb(var(--grade-aplus) / 0.18)' : 'var(--glass-fill)' }}>
+        {on === true ? '✓' : na ? '–' : '·'}
       </span>
-      {label}
+      <span style={na ? { textDecoration: 'line-through', opacity: 0.65 } : undefined}>{label}</span>
+      {na && <span className="text-[9px] uppercase tracking-[0.08em]">n/a</span>}
     </span>
   );
 }
@@ -182,8 +191,8 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                     </p>
                   </div>
                   <GradeBadge
-                    total={trade.checklist_score}
-                    max={GRADE_MAX}
+                    total={trade.checklist_earned}
+                    max={trade.checklist_possible}
                     size="md"
                     triggerFired={trade.trigger_fired}
                   />
@@ -238,8 +247,9 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                 */}
                 <div className="mb-3 grid gap-3 sm:grid-cols-3">
                   {CHECKLIST_PHASES.map((phase) => {
-                    const earned = phase.items.reduce((n, i) => n + (trade[i.key] ? i.points : 0), 0);
-                    const possible = phase.items.reduce((n, i) => n + i.points, 0);
+                    const earned = phase.items.reduce((n, i) => n + (trade[i.key] === true ? i.points : 0), 0);
+                    // Points that were on the table on this trade, not in the plan.
+                    const possible = phase.items.reduce((n, i) => n + (trade[i.key] === null ? 0 : i.points), 0);
                     return (
                       <Group key={phase.phase}>
                         <div className="flex items-baseline justify-between gap-3 pb-1 pt-1.5">
@@ -319,8 +329,12 @@ export function DetailPanel({ trade, onClose, onChanged }: DetailPanelProps) {
                       label="Mistakes"
                       value={trade.mistake_tags.length ? trade.mistake_tags.join(', ') : (trade.mistake_tag ?? '—')}
                     />
-                    <Row label="Contracts / risk / stop"
-                      value={`${trade.contracts ?? '—'} · $${trade.risk_dollars ?? '—'} · ${trade.stop_points ?? '—'}pt`} />
+                    <Row label="Contracts / P&L / stop"
+                      value={`${trade.contracts ?? '—'} · ${
+                        trade.pnl_dollars == null
+                          ? '—'
+                          : `${trade.pnl_dollars < 0 ? '−' : ''}$${Math.abs(trade.pnl_dollars).toFixed(2)}`
+                      } · ${trade.stop_points ?? '—'}pt`} />
                   </Group>
                 </div>
 

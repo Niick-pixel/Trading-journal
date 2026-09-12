@@ -462,8 +462,11 @@ export function checklistEdge(trades: Trade[]): ItemEdge[] {
     ts.length ? ts.reduce((sum, t) => sum + (t.r_multiple as number), 0) / ts.length : null;
 
   return CHECKLIST_ITEMS.map((item) => {
-    const on = taken.filter((t) => t[item.key]);
-    const off = taken.filter((t) => !t[item.key]);
+    // N/A is neither side. A trade where the condition never arose says
+    // nothing about whether the condition is worth checking, and counting it
+    // as "without" would make every box look better than it is.
+    const on = taken.filter((t) => t[item.key] === true);
+    const off = taken.filter((t) => t[item.key] === false);
     const withAvgR = avg(on);
     const withoutAvgR = avg(off);
     return {

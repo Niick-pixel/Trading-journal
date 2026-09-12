@@ -6,12 +6,13 @@ import {
   ACCOUNTS, CHECKLIST_KEYS, CONTEXT_FLAGS, CONTEXT_GROUPS, DIRECTIONS, HTF_BIASES, INSTRUMENTS,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES,
   SKIP_REASONS, TARGET_TYPES, TRADE_STATUSES,
-  type Account, type ChecklistKey, type ContextFlag, type Direction, type HtfBias,
+  type Account, type ChecklistAnswer, type ChecklistKey, type ContextFlag,
+  type Direction, type HtfBias,
   type Instrument, type MistakeTag, type Outcome, type PremiumDiscount, type Regrade,
   type SkipReason, type Reason, type Session, type SetupType, type TargetType,
   type TradeStatus, type Tri,
 } from '@/lib/domain';
-import { GRADE_MAX, checklistScore, triggerFired } from '@/lib/grade';
+import { checklistEarned, checklistPossible, checklistScore, triggerFired } from '@/lib/grade';
 import { macroWindowFor } from '@/lib/macro';
 import { press, spring, springSoft, riseIn } from '@/lib/motion';
 import { reasonAccent } from '@/lib/layout';
@@ -53,12 +54,16 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
   const setFlag = (flag: ContextFlag, value: boolean) =>
     setContext((prev) => ({ ...prev, [flag]: value }));
 
-  const [checks, setChecks] = useState<Record<ChecklistKey, boolean>>(() =>
+  /*
+    Tri-state, and `trade[k] ?? null` rather than Boolean(): a box saved as
+    "did not apply" has to come back as N/A, not silently as a miss.
+  */
+  const [checks, setChecks] = useState<Record<ChecklistKey, ChecklistAnswer>>(() =>
     Object.fromEntries(
-      CHECKLIST_KEYS.map((k) => [k, trade ? Boolean(trade[k]) : false]),
-    ) as Record<ChecklistKey, boolean>,
+      CHECKLIST_KEYS.map((k) => [k, trade ? trade[k] ?? null : false]),
+    ) as Record<ChecklistKey, ChecklistAnswer>,
   );
-  const setCheck = (key: ChecklistKey, value: boolean) =>
+  const setCheck = (key: ChecklistKey, value: ChecklistAnswer) =>
     setChecks((prev) => ({ ...prev, [key]: value }));
 
   // Tri-state, starting unanswered. This used to default to `true`, so every
@@ -202,6 +207,8 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  const earned = checklistEarned(checks);
+  const possible = checklistPossible(checks);
   const total = checklistScore(checks);
   const fired = triggerFired(checks);
   const planned = status === 'Planned';
@@ -259,6 +266,16 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
       r_left_on_table: num(rLeftOnTable),
       skip_reason: skipReason,
       contracts: num(contracts),
+      /*
+        The number the account actually moved by.
+
+        This was missing from the payload for its entire life: the field was on
+        the form, the column was in the schema, the validator accepted it and
+        the stats preferred it over risk x R — and every value ever typed into
+        it was dropped on the floor between the input and the request. Nothing
+        errored, which is why it took a field-by-field round trip to find.
+      */
+      pnl_dollars: num(pnlDollars),
       /*
         These four are on the screenshot, so the form stopped asking. An edit
         must still carry whatever an older record already holds — dropping them
@@ -718,7 +735,7 @@ export function NewTradeForm({ trade }: { trade?: Trade }) {
           </span>
 
           <div className="mb-6">
-            <GradeBadge total={total} max={GRADE_MAX} size="lg" showPrompt triggerFired={fired} />
+            <GradeBadge total={earned} max={possible} size="lg" showPrompt triggerFired={fired} />
           </div>
 
           <Checklist answers={checks} onChange={setCheck} accent={accent} />

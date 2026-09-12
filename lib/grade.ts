@@ -1,13 +1,16 @@
 import {
-  CHECKLIST_ITEMS, GRADE_MAX, TAKE_IT_THRESHOLD, TRIGGER_KEYS, type ChecklistKey,
+  CHECKLIST_ITEMS, GRADE_MAX, TAKE_IT_THRESHOLD, TRIGGER_KEYS,
+  type ChecklistAnswer, type ChecklistKey,
 } from './domain';
+
+type Answers = Partial<Record<ChecklistKey, ChecklistAnswer>>;
 
 /** What gradeLetter() can return. The checklist's bands produce exactly these. */
 export const GRADE_LETTERS = ['A+', 'A', 'B', 'C', 'F'] as const;
 export type GradeLetter = (typeof GRADE_LETTERS)[number];
 
 /**
- * Letter from the 100-point checklist score.
+ * Letter from the checklist score, which is a percentage of what applied.
  *
  * 70 is the line the plan draws: at or above it, with the trigger fired, the
  * trade is a commitment rather than a decision.
@@ -20,13 +23,44 @@ export function gradeLetter(score: number): GradeLetter {
   return 'F';
 }
 
-export function checklistScore(answers: Partial<Record<ChecklistKey, boolean>>): number {
-  return CHECKLIST_ITEMS.reduce((sum, item) => sum + (answers[item.key] ? item.points : 0), 0);
+/** Points the trade actually earned. */
+export function checklistEarned(answers: Answers): number {
+  return CHECKLIST_ITEMS.reduce(
+    (sum, item) => sum + (answers[item.key] === true ? item.points : 0), 0);
+}
+
+/**
+ * Points that were on the table.
+ *
+ * A box answered `null` did not apply on this trade, so its weight is not
+ * offered — and cannot be missed. Everything else counts whether it was
+ * ticked or not.
+ */
+export function checklistPossible(answers: Answers): number {
+  return CHECKLIST_ITEMS.reduce(
+    (sum, item) => sum + (answers[item.key] === null ? 0 : item.points), 0);
+}
+
+/**
+ * The score, as a percentage of what applied.
+ *
+ * Was a mark out of a fixed 100. Not every session offers every condition, and
+ * scoring an absent one as a failed one capped a flawless trade at 80 and then
+ * had adherence report a rule break on it. On a trade where every box applied
+ * this returns exactly what it always did.
+ *
+ * Kept in step with the identical expression in the schema's generated column,
+ * which stays the authority for anything read back out of the database.
+ */
+export function checklistScore(answers: Answers): number {
+  const possible = checklistPossible(answers);
+  if (possible === 0) return 0;
+  return Math.round((checklistEarned(answers) * 100) / possible);
 }
 
 /** Both Phase 3 answers. Without them the entry does not exist. */
-export function triggerFired(answers: Partial<Record<ChecklistKey, boolean>>): boolean {
-  return TRIGGER_KEYS.every((key) => Boolean(answers[key]));
+export function triggerFired(answers: Answers): boolean {
+  return TRIGGER_KEYS.every((key) => answers[key] === true);
 }
 
 export const BELOW_STANDARD_AT = TAKE_IT_THRESHOLD;

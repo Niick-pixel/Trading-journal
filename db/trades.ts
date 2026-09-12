@@ -22,8 +22,8 @@ const BOOL_COLUMNS = [
   'macro_time', 'macro_time_auto', 'sweep_before_entry', 'singular_gap', 'target_unswept', 'smt',
   'displacement', 'mss_confirmed', 'volume_imbalance', 'consequent_encroachment',
   'equal_highs_lows', 'retest_entry', 'news_window',
-  'chk_htf_bias', 'chk_killzone', 'chk_no_news',
-  'chk_sweep', 'chk_displacement_fvg', 'chk_targets_clear', 'chk_clean_path',
+  // Phase 3 only. The trigger is always answerable — the other seven boxes are
+  // tri-state and live in NULLABLE_BOOL_COLUMNS below.
   'chk_returned_to_fvg', 'chk_inversion_close',
   'graded_post_hoc',
 ] as const;
@@ -38,7 +38,17 @@ const GENERATED_BOOL_COLUMNS = ['trigger_fired'] as const;
  * collapsing that null to 0 would quietly turn "I never checked" into "no" —
  * which is exactly the number the hesitation-cost panel reads.
  */
-const NULLABLE_BOOL_COLUMNS = ['would_have_hit_tp', 'followed_rules', 'reached_1r'] as const;
+const NULLABLE_BOOL_COLUMNS = [
+  'would_have_hit_tp', 'followed_rules', 'reached_1r',
+  /*
+    The seven Phase 1 and Phase 2 checklist boxes. NULL means the condition did
+    not apply on this trade, so its points were never on the table. Coercing it
+    to 0 here would put those points back on the table as a miss, which is the
+    exact behaviour the third state exists to remove.
+  */
+  'chk_htf_bias', 'chk_killzone', 'chk_no_news',
+  'chk_sweep', 'chk_displacement_fvg', 'chk_targets_clear', 'chk_clean_path',
+] as const;
 
 function hydrate(row: Row, dismissed: Record<string, string | null> = {}): Trade {
   const trade = { ...row } as unknown as Trade;
@@ -433,6 +443,23 @@ export function purgeTrade(id: string): boolean {
     db.exec('ROLLBACK');
     throw err;
   }
-  deleteScreenshot(trade.screenshot_path);
+  /*
+    Only if nothing else is pointing at it.
+
+    A duplicate copies the source's screenshot_path rather than the file, and
+    an import can restore a row that references an image already on disk. So a
+    path is not owned by one trade, and deleting the file with the row left the
+    other trade showing a broken image — a purge quietly damaging a record it
+    was not asked to touch.
+  */
+  if (!screenshotStillUsed(trade.screenshot_path)) deleteScreenshot(trade.screenshot_path);
   return true;
+}
+
+/** Whether any surviving trade — live or trashed — still points at this file. */
+function screenshotStillUsed(path: string): boolean {
+  const row = getDb()
+    .prepare('SELECT 1 FROM trades WHERE screenshot_path = ? LIMIT 1')
+    .get(path);
+  return row !== undefined;
 }

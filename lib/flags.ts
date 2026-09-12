@@ -53,7 +53,9 @@ const RULES: Array<{ key: FlagKey; label: string; test: (t: Trade) => string | n
   {
     key: 'no_target_named',
     label: 'Taken with no target named',
-    test: (t) => (isTaken(t.outcome) && (t.target_type === 'Other' || !t.chk_targets_clear))
+    // `=== false` rather than falsy: a box marked N/A was not answered "no",
+    // and flagging it would be the app asserting from silence again.
+    test: (t) => (isTaken(t.outcome) && (t.target_type === 'Other' || t.chk_targets_clear === false))
       ? 'A target you cannot name is a target you cannot be wrong about.'
       : null,
   },

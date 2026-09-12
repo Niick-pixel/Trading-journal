@@ -1,5 +1,5 @@
 import {
-  ACCOUNTS, CHECKLIST_KEYS, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAGS,
+  ACCOUNTS, CHECKLIST_ITEMS, CONTEXT_FLAGS, DIRECTIONS, HTF_BIASES, INSTRUMENTS, MISTAKE_TAGS,
   OUTCOMES, PREMIUM_DISCOUNTS, REASONS, REGRADES, SESSIONS, SETUP_TYPES, SKIP_REASONS,
   TARGET_TYPES, TRADE_STATUSES,
   type ChecklistKey, type ContextFlag, type MistakeTag, type Tri,
@@ -131,7 +131,18 @@ export function parseTradeInput(
       premium_discount: premium_discount!, target_type: target_type!,
       // Every checklist answer, read the same way; absent means false, which is
       // what an older client or an unanswered box means.
-      ...(Object.fromEntries(CHECKLIST_KEYS.map((k) => [k, bool(k)])) as Record<ChecklistKey, boolean>),
+      /*
+        Phase 1 and Phase 2 are tri-state; Phase 3 is not.
+
+        `tri` keeps an explicit null as "did not apply". An older client that
+        never had the third state sends true/false and is unaffected, and a
+        payload missing the key entirely reads as null there — which for a box
+        nobody answered is the honest reading, and is exactly what the form
+        already sends for a fresh trade.
+      */
+      ...(Object.fromEntries(CHECKLIST_ITEMS.map(
+        (item) => [item.key, item.canBeNA ? tri(item.key) : bool(item.key)],
+      )) as Pick<TradeInput, ChecklistKey>),
       followed_rules: tri('followed_rules'),
       regrade: oneOf('regrade', REGRADES),
       // Legacy single tag. Nothing writes it any more; it is preserved so the

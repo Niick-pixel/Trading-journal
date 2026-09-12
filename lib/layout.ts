@@ -102,6 +102,16 @@ export interface BoardLayout {
   reasonEdges: Array<[string, string]>;
   /** Dashed cross-cluster edges: same target type, both lost. */
   leakEdges: Array<[string, string]>;
+  /**
+   * The width the grid ASKED for, before anything was dragged.
+   *
+   * Cluster regions are drawn around where their cards actually ended up, so
+   * their bounding box shifts every time a single card moves a pixel. Anything
+   * anchored to that box — the board title was — drifts on every drag, which
+   * reads as the whole board being unstable. This is the arrangement the
+   * layout laid out, and it only changes when the groups themselves do.
+   */
+  nominalWidth: number;
 }
 
 function clusterGrid(count: number, scale: number) {
@@ -188,6 +198,7 @@ export function computeLayout(trades: Trade[], scale = 1, mode: GroupMode = 'rea
   let cursorX = 0;
   let cursorY = 0;
   let rowHeight = 0;
+  let nominalWidth = 0;
 
   for (const group of groups) {
     const grid = clusterGrid(group.trades.length, scale);
@@ -257,9 +268,10 @@ export function computeLayout(trades: Trade[], scale = 1, mode: GroupMode = 'rea
 
     cursorX += grid.width + CLUSTER_GAP;
     rowHeight = Math.max(rowHeight, grid.height);
+    nominalWidth = Math.max(nominalWidth, cursorX - CLUSTER_GAP);
   }
 
-  return { clusters, nodes, reasonEdges, leakEdges: leakChains(trades) };
+  return { clusters, nodes, reasonEdges, leakEdges: leakChains(trades), nominalWidth };
 }
 
 /**

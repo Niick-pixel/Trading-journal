@@ -1,4 +1,6 @@
-import { TAKE_IT_THRESHOLD, isScored, type ChecklistKey } from './domain';
+import {
+  TAKE_IT_THRESHOLD, isScored, type ChecklistAnswer, type ChecklistKey,
+} from './domain';
 
 /**
  * Everything the derivation needs, and nothing else — so it can be computed
@@ -12,7 +14,7 @@ export type AdherenceInput = {
   trigger_fired: boolean;
   checklist_score: number;
   mistake_tags: readonly string[];
-} & Partial<Record<ChecklistKey, boolean>>;
+} & Partial<Record<ChecklistKey, ChecklistAnswer>>;
 
 /**
  * Whether the rules were actually followed, computed rather than asked.

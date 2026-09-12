@@ -130,9 +130,15 @@ export const CONTEXT_FLAGS: ContextFlag[] = CONTEXT_FLAG_LIST.map((f) => f.key);
  *
  * Three phases, weighted to 100. Phase 3 must fire for an entry to exist — a
  * high score with no inversion close is a setup still forming, not a trade —
- * and once it does fire at 70 or more, taking it is the rule rather than a
+ * and once it does fire at 70% or more, taking it is the rule rather than a
  * decision. The weights live here and in the schema's generated columns; the
  * score is computed by SQLite so it can never disagree with the answers.
+ *
+ * The 100 is what the plan can award, not what every trade is marked out of.
+ * A Phase 1 or Phase 2 box can be answered "did not apply" — no major level
+ * anywhere near price is not a sweep I missed — and its weight then leaves the
+ * denominator rather than counting against me. Phase 3 cannot: without the
+ * trigger there is no entry to grade at all.
  */
 export const CHECKLIST_PHASES = [
   {
@@ -172,16 +178,39 @@ export interface ChecklistItem {
   label: string;
   hint: string;
   phase: string;
+  /** Whether this box can be marked "did not apply" on a given trade. */
+  canBeNA: boolean;
 }
 
-export const CHECKLIST_ITEMS: ChecklistItem[] = CHECKLIST_PHASES.flatMap((p) =>
-  p.items.map((item) => ({ ...item, phase: p.phase })),
-);
-
-export const CHECKLIST_KEYS: ChecklistKey[] = CHECKLIST_ITEMS.map((i) => i.key);
+/**
+ * A checklist answer.
+ *
+ * true  — the condition was met
+ * false — it was not
+ * null  — it did not apply, so its points were never on the table
+ *
+ * The third state exists because not every session offers every condition. If
+ * price is nowhere near a major level, "Clear sweep of a MAJOR level" is not a
+ * rule that was broken; it is a question the market did not ask. Scoring it as
+ * a miss capped a flawless setup at 80 and then reported a rule break.
+ */
+export type ChecklistAnswer = boolean | null;
 
 /** The two Phase 3 answers. Without both, there is no trade. */
 export const TRIGGER_KEYS: ChecklistKey[] = ['chk_returned_to_fvg', 'chk_inversion_close'];
+
+export const CHECKLIST_ITEMS: ChecklistItem[] = CHECKLIST_PHASES.flatMap((p) =>
+  p.items.map((item) => ({
+    ...item,
+    phase: p.phase,
+    // Phase 3 is the trigger. Without the return to the FVG and the inversion
+    // close there is no entry at all, so "it did not apply" cannot be true of
+    // a trade that exists — those two are always on the table.
+    canBeNA: !TRIGGER_KEYS.includes(item.key),
+  })),
+);
+
+export const CHECKLIST_KEYS: ChecklistKey[] = CHECKLIST_ITEMS.map((i) => i.key);
 
 /** 10+10+5 + 20+15+15+5 + 5+15 */
 export const GRADE_MAX = CHECKLIST_ITEMS.reduce((sum, i) => sum + i.points, 0);
@@ -295,6 +324,6 @@ export const CONFIDENCE_LEVELS = [1, 2, 3, 4, 5] as const;
  * item" look identical in the data. This is the one place that distinction is
  * recoverable: if no box is ticked at all, the checklist was skipped.
  */
-export function isScored(t: Partial<Record<ChecklistKey, boolean>>): boolean {
+export function isScored(t: Partial<Record<ChecklistKey, ChecklistAnswer>>): boolean {
   return CHECKLIST_KEYS.some((k) => t[k] === true);
 }

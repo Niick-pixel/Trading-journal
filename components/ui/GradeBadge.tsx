@@ -10,7 +10,16 @@ import { spring, springBouncy } from '@/lib/motion';
 const AMBER = 'var(--amber)';
 
 interface GradeBadgeProps {
+  /** Points earned. */
   total: number;
+  /**
+   * Points that were on the table for THIS trade, not the plan's fixed 100.
+   *
+   * A box marked "did not apply" takes its weight out of the denominator, so a
+   * session with no major level to sweep is graded out of 80. The letter comes
+   * from the percentage of what applied; the caption shows the raw fraction so
+   * the smaller denominator is visible rather than silently assumed.
+   */
   max: number;
   /** 'lg' is the live badge in the capture form; 'sm' rides in a node corner. */
   size?: 'sm' | 'md' | 'lg';
@@ -28,8 +37,9 @@ interface GradeBadgeProps {
 export function GradeBadge({
   total, max, size = 'md', showPrompt = false, triggerFired = true,
 }: GradeBadgeProps) {
-  const letter = gradeLetter(total);
-  const below = isBelowStandard(total);
+  const pct = max > 0 ? Math.round((total * 100) / max) : 0;
+  const letter = gradeLetter(pct);
+  const below = isBelowStandard(pct);
   // No trigger is the louder problem, so it wins the one line we show.
   const prompt = !triggerFired ? NO_TRIGGER_PROMPT : below ? BELOW_STANDARD_PROMPT : null;
   // Off-plan, the badge goes amber regardless of the letter's own colour.
@@ -61,6 +71,11 @@ export function GradeBadge({
         <span className={`mt-0.5 tabular-nums ${dims.num}`} style={{ color: 'var(--text-faint)' }}>
           {total}/{max}
         </span>
+        {max > 0 && max < 100 && (
+          <span className={`tabular-nums ${dims.num}`} style={{ color: 'var(--text-faint)' }}>
+            {pct}%
+          </span>
+        )}
       </motion.div>
 
       <AnimatePresence>

@@ -1,20 +1,14 @@
 import { listTrades } from '@/db/trades';
-import {
-  ACCOUNTS, INSTRUMENTS, MIN_SAMPLE, REASON_HUE, SESSIONS, SETUP_TYPES, type Account,
-} from '@/lib/domain';
-import { GRADE_COLOR } from '@/lib/grade';
+import { ACCOUNTS, MIN_SAMPLE, REASON_HUE, type Account } from '@/lib/domain';
 import { reasonAccent } from '@/lib/layout';
 import {
-  accountsInUse, aggregate, byGradeBucket, byMacroTime, checklistEdge, discipline, edge,
-  byConfidence, byGradeBand, equityCurves, excursion, forAccount, gradeHonesty, groupByField,
-  hesitation, losingReasons, money, passedSetups, preGradedOnly, rByMistakeTag, rByReason,
-  rByTargetType, rHistogram, streaks, whenHeatmap,
+  accountsInUse, aggregate, byConfidence, byGradeBand, checklistEdge, discipline, edge,
+  equityCurves, excursion, forAccount, gradeHonesty, hesitation, money, passedSetups,
+  preGradedOnly, rByMistakeTag, rByReason,
 } from '@/lib/stats';
 import { EquityChart } from '@/components/stats/EquityChart';
-import { Histogram } from '@/components/stats/Histogram';
-import { WhenHeatmap } from '@/components/stats/WhenHeatmap';
 import { AccountSwitcher } from '@/components/stats/AccountSwitcher';
-import { Line, Panel, RateBars, SignedBars, Stat, type BarRow } from '@/components/stats/Bars';
+import { Line, Panel, SignedBars, Stat, type BarRow } from '@/components/stats/Bars';
 import { TitleBar } from '@/components/shell/TitleBar';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +19,18 @@ const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`
 const signed = (v: number, dp: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${Math.abs(v).toFixed(dp)}R`;
 const r = (v: number | null) => (v == null ? '—' : signed(v, 1));
 const r2 = (v: number | null) => (v == null ? '—' : signed(v, 2));
+/*
+  To the cent, always.
+
+  These were rounded to whole dollars, which is fine for a headline and wrong
+  for a journal: a $412.37 loss is not a $412 loss, and the difference compounds
+  quietly across a month. What the account did is a fact, and a fact reported to
+  the nearest dollar is a rounded fact.
+*/
 const usd = (v: number) =>
-  `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString(undefined, {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })}`;
 
 export default async function StatsPage(
   { searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> },
@@ -56,14 +60,12 @@ export default async function StatsPage(
   const agg = aggregate(trades);
   const m = money(trades);
   const e = edge(trades);
-  const leaks = losingReasons(trades);
   const d = discipline(trades);
   const honesty = gradeHonesty(trades);
   const hes = hesitation(trades);
   const curves = equityCurves(trades);
   const bands = byGradeBand(trades);
   const conf = byConfidence(trades);
-  const run = streaks(trades);
   const exc = excursion(trades);
   const passed = passedSetups(trades);
   const tagRows: BarRow[] = rByMistakeTag(trades).map((t) => ({
@@ -75,64 +77,17 @@ export default async function StatsPage(
     meta: `· ${g.stats.count}`, swatch: reasonAccent(g.key),
   }));
 
-  const targetRows: BarRow[] = rByTargetType(trades).map((g) => ({
-    label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
-    meta: `· ${g.stats.count}`, highlight: g.key === 'Diagonal trendline',
-  }));
 
-  const gradeRows: BarRow[] = byGradeBucket(trades).map((g) => ({
-    label: g.key, value: (g.stats.winRate ?? 0) * 100, display: pct(g.stats.winRate),
-    meta: `· ${g.stats.taken} taken`, accent: GRADE_COLOR[g.key as keyof typeof GRADE_COLOR],
-  }));
 
-  const macroRows: BarRow[] = byMacroTime(trades).map((g) => ({
-    label: g.key, value: (g.stats.winRate ?? 0) * 100, display: pct(g.stats.winRate),
-    meta: `· ${g.stats.taken} · ${r(g.stats.totalR)}`,
-    accent: g.key === 'Inside macro' ? 'var(--accent)' : 'var(--outcome-neutral)',
-  }));
 
-  const sessionRows: BarRow[] = groupByField(trades, (t) => t.session, SESSIONS)
-    .sort((a, b) => a.stats.totalR - b.stats.totalR)
-    .map((g) => ({
-      label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
-      meta: `· ${pct(g.stats.winRate)} · ${g.stats.taken}`,
-    }));
 
-  const setupRows: BarRow[] = groupByField(trades, (t) => t.setup_type, SETUP_TYPES)
-    .sort((a, b) => a.stats.totalR - b.stats.totalR)
-    .map((g) => ({
-      label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
-      meta: `· ${pct(g.stats.winRate)} · ${g.stats.taken}`,
-    }));
 
-  const instrumentRows: BarRow[] = groupByField(trades, (t) => t.instrument, INSTRUMENTS)
-    .sort((a, b) => a.stats.totalR - b.stats.totalR)
-    .map((g) => ({
-      label: g.key, value: g.stats.totalR, display: r(g.stats.totalR),
-      meta: `· ${pct(g.stats.winRate)} · ${g.stats.taken}`,
-    }));
 
   // Every row here is a loss, so they all take the loss colour. Tinting them by
   // reason hue put a green bar in a panel about what is costing you.
-  const leakRows: BarRow[] = leaks.map((l) => ({
-    label: l.reason, value: -l.rLost, display: `−${l.rLost.toFixed(1)}R`,
-    meta: `· ${l.losses} loss${l.losses === 1 ? '' : 'es'}`,
-    swatch: reasonAccent(l.reason),
-  }));
 
   // Rule-following against rule-breaking. Two bars, because the comparison is
   // the whole point — a rule-breaking total on its own means nothing.
-  const disciplineRows: BarRow[] = [
-    { label: 'Followed the rules', stats: d.followed },
-    { label: 'Broke a rule', stats: d.broken },
-  ]
-    .filter((row) => row.stats.count > 0)
-    .map(({ label, stats }) => ({
-      label,
-      value: stats.totalR,
-      display: r(stats.totalR),
-      meta: `· ${stats.taken} taken · ${pct(stats.winRate)}`,
-    }));
 
   // Negative, because R you did not take is R you did not make — a green bar
   // here would read as a win.
@@ -186,13 +141,20 @@ export default async function StatsPage(
           ) : (
             <div className="space-y-5">
               {/*
-                Adherence is the headline, above P&L and larger, because it is
-                the only number here I fully control. A good month of P&L with
-                bad adherence is a warning, not a result.
+              {/*
+                Twenty-five panels, cut to eleven.
+
+                Most of what was here described the record rather than
+                interrogating it: R by instrument, by session, by setup, an R
+                distribution, a heatmap of which hour I trade. All true, and
+                none of it anything I would do differently on Monday for having
+                read it. What is left answers one of three questions — did I
+                follow the plan, is the plan actually an edge, and where am I
+                lying to myself — and each one has an action attached to it.
               */}
               <Panel
                 title="Adherence"
-                note="Share of the SCORED trades where the checklist says the rules were followed — trigger fired, 70 or more, no mistake tagged. Derived, never self-reported. A trade whose checklist was left blank counts as neither."
+                note="Share of the SCORED trades where the checklist says the rules were followed — trigger fired, 70% or more of the boxes that APPLIED, no mistake tagged. Derived, never self-reported. A box marked N/A takes its points out of the denominator instead of counting as a miss, and a trade whose checklist was left blank counts as neither followed nor broken."
               >
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div>
@@ -226,11 +188,6 @@ export default async function StatsPage(
                 </div>
               </Panel>
 
-              {/*
-                The single most useful picture here. Two lines on one axis is
-                an argument, not a report: if the rule-following curve climbs
-                while the other sinks, the plan is the edge.
-              */}
               <Panel
                 title="Following the rules vs breaking them"
                 note="Cumulative R, in the order the trades happened, split by what the checklist says about each one."
@@ -264,104 +221,8 @@ export default async function StatsPage(
                 />
               </div>
 
+              {/* Where I am lying to myself. */}
               <div className="grid gap-5 lg:grid-cols-2">
-                <Panel title="The edge" note="Whether the wins are big enough to pay for the losses.">
-                  <Line label="Profit factor" value={e.profitFactor == null ? '—' : e.profitFactor.toFixed(2)}
-                    tone={(e.profitFactor ?? 0) >= 1 ? 'win' : 'loss'} />
-                  <Line label="Average win" value={r(e.avgWinR)} tone="win" />
-                  <Line label="Average loss" value={e.avgLossR == null ? '—' : `−${e.avgLossR.toFixed(1)}R`} tone="loss" />
-                  <Line label="Best trade" value={r(e.bestR)} tone="win" />
-                  <Line label="Worst trade" value={r(e.worstR)} tone="loss" />
-                  <Line label="Longest win streak" value={String(e.longestWinStreak)} />
-                  <Line label="Longest loss streak" value={String(e.longestLossStreak)} />
-                </Panel>
-
-                <Panel title="Money" note={m.priced < agg.taken
-                  ? `${m.priced} of ${agg.taken} taken trades have a money figure — the rest are excluded here.`
-                  : m.derived > 0
-                    ? `${m.derived} of ${m.priced} are estimated as risk x R rather than recorded, so they are not bounded by the risk — a −2R loss on $200 is −$400.`
-                    : 'Recorded from the account, not estimated.'}>
-                  <Line label="Gross won" value={usd(m.won)} tone="win" />
-                  <Line label="Gross lost" value={usd(m.lost)} tone="loss" />
-                  <Line label="Net" value={usd(m.net)} tone={m.net >= 0 ? 'win' : 'loss'} />
-                  <Line label="Biggest win" value={usd(m.biggestWin)} tone="win" />
-                  <Line label="Biggest loss" value={usd(-m.biggestLoss)} tone="loss" />
-
-                </Panel>
-
-                <Panel title="What is costing you" note="Reasons ranked by R actually lost — losses only, so a reason that both makes and loses a lot cannot hide behind its wins.">
-                  {leakRows.length ? <SignedBars rows={leakRows} /> : (
-                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>No losses recorded yet.</p>
-                  )}
-                </Panel>
-
-                <Panel title="R by reason" note="Net, worst first. This is the list that changes how you trade.">
-                  <SignedBars rows={reasonRows} />
-                </Panel>
-
-                <Panel title="R by target type" note="Diagonal trendline is highlighted — it is the one you asked to watch.">
-                  <SignedBars rows={targetRows} />
-                </Panel>
-
-                <Panel title="R by setup" note="Which parts of the model actually pay.">
-                  <SignedBars rows={setupRows} />
-                </Panel>
-
-                <Panel title="R by session" note="When you are at your best, and when you should be shut.">
-                  <SignedBars rows={sessionRows} />
-                </Panel>
-
-                <Panel title="R by instrument">
-                  <SignedBars rows={instrumentRows} />
-                </Panel>
-
-                <Panel title="Win rate by grade" note="Does your grading predict outcomes? If these bars do not descend, it does not.">
-                  <RateBars rows={gradeRows} />
-                  {agg.taken < 20 && (
-                    <p className="mt-3 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                      n = {agg.taken}. Under 20 trades these bars are noise — do not conclude anything
-                      about your grading from them yet.
-                    </p>
-                  )}
-                </Panel>
-
-                <Panel title="Macro windows" note="Inside :50–:10 and :20–:40, against everything else.">
-                  <RateBars rows={macroRows} />
-                </Panel>
-              </div>
-
-              {/* The plan's own three questions. They measure you, not the
-                  market, which is why they sit apart from everything above. */}
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Panel
-                  title="Discipline"
-                  note="The premise of the plan is that the edge is in the rules. If breaking them nets positive, that premise needs an answer — not a shrug."
-                >
-                  {disciplineRows.length ? <SignedBars rows={disciplineRows} /> : (
-                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                      Nothing marked as a rule break yet.
-                    </p>
-                  )}
-                  <div className="mt-3">
-                    <Line
-                      label="R from rule breaks"
-                      value={r(d.costOfBreaking)}
-                      tone={d.costOfBreaking >= 0 ? 'win' : 'loss'}
-                    />
-                    <Line
-                      label="Taken without a trigger"
-                      value={d.untriggered.taken ? `${d.untriggered.taken} · ${r(d.untriggered.totalR)}` : 'None'}
-                      tone={d.untriggered.taken ? 'loss' : 'win'}
-                    />
-                  </div>
-                  {d.untriggered.taken > 0 && (
-                    <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'rgb(var(--outcome-loss))' }}>
-                      Phase 3 never fired on {d.untriggered.taken} trade
-                      {d.untriggered.taken === 1 ? '' : 's'} you took. By the plan those entries do not exist.
-                    </p>
-                  )}
-                </Panel>
-
                 <Panel
                   title="Self-assessment gap"
                   note="How often I said I followed every rule and the checklist disagreed. That gap closing is real progress — and it cannot be faked by being hard on myself, which shows up as the row below it instead."
@@ -394,7 +255,6 @@ export default async function StatsPage(
                     </>
                   )}
                 </Panel>
-
                 <Panel
                   title="Grade honesty"
                   note="The score at entry against the re-grade after the close. A pattern of dropping means the boxes are being ticked to reach a number."
@@ -434,7 +294,95 @@ export default async function StatsPage(
                     </>
                   )}
                 </Panel>
+              </div>
 
+              {/* Whether the plan is an edge, and which parts of it are. */}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Panel
+                  title="Win rate by grade band"
+                  note="Does the checklist predict anything? If these do not climb, it does not — and n is on every row because four trades can show any number at all."
+                >
+                  <div className="space-y-1">
+                    {bands.map((b) => (
+                      <div key={b.label} className="flex items-baseline justify-between gap-3 py-1">
+                        <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>{b.label}</span>
+                        <span className="flex items-baseline gap-3">
+                          <span className="tabular-nums text-[12px] font-semibold">{pct(b.winRate)}</span>
+                          <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                            {r2(b.expectancy)}
+                          </span>
+                          <span
+                            className="tabular-nums text-[11px]"
+                            style={{ color: b.thin ? 'rgb(var(--amber))' : 'var(--text-faint)' }}
+                          >
+                            n {b.taken}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {bands.some((b) => b.thin) && (
+                    <p className="mt-3 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
+                      Bands marked in amber have fewer than {MIN_SAMPLE} taken trades. Those numbers
+                      are noise — do not change anything because of them.
+                    </p>
+                  )}
+                </Panel>
+                <Panel
+                  title="Is each box earning its weight?"
+                  note="Average R with the box ticked, minus average R without it. A 20-point item with no lift, or a 5-point item with a large one, is an argument that the weights are wrong."
+                >
+                  {itemRows.length ? <SignedBars rows={itemRows} /> : (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      Not enough trades yet — each box needs trades on both sides of it to be compared.
+                    </p>
+                  )}
+                </Panel>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Panel title="R by reason" note="Net, worst first. This is the list that changes how you trade.">
+                  <SignedBars rows={reasonRows} />
+                </Panel>
+                <Panel title="R by mistake" note="Every tag on every trade, worst first. A tag on a winner still counts.">
+                  {tagRows.length ? <SignedBars rows={tagRows} /> : (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Nothing tagged yet.</p>
+                  )}
+                </Panel>
+              </div>
+
+              {/* What to change. Each of these names a behaviour. */}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Panel
+                  title="Management or selection?"
+                  note="Whether the losers were ever winners. If most of them were up a full R before stopping out, the entries were fine and the exits were not — and no win rate will ever tell you that."
+                >
+                  {exc.losersWithData === 0 ? (
+                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      Nothing recorded yet. &ldquo;Reached +1R before the stop?&rdquo; is an optional
+                      question on the trade form.
+                    </p>
+                  ) : (
+                    <>
+                      <Line
+                        label="Losers that reached +1R first"
+                        value={`${exc.losersThatReached1R} of ${exc.losersWithData}`}
+                        tone={exc.losersThatReached1R > exc.losersWithData / 2 ? 'loss' : 'win'}
+                      />
+                      {exc.losersThatReached1R > exc.losersWithData / 2 ? (
+                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
+                          More than half your losers were up a full R before they stopped you out. That is
+                          a management problem, not a selection one.
+                        </p>
+                      ) : (
+                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
+                          Most losers never went your way. Those are selection, not management — the exits
+                          are not what is costing you.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </Panel>
                 <Panel
                   title="What hesitating cost"
                   note="A skipped setup that would have won is a real loss that never reaches the P&L — which is exactly why it goes unexamined."
@@ -471,119 +419,9 @@ export default async function StatsPage(
                     </>
                   )}
                 </Panel>
-
-                <Panel
-                  title="Is each box earning its weight?"
-                  note="Average R with the box ticked, minus average R without it. A 20-point item with no lift, or a 5-point item with a large one, is an argument that the weights are wrong."
-                >
-                  {itemRows.length ? <SignedBars rows={itemRows} /> : (
-                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                      Not enough trades yet — each box needs trades on both sides of it to be compared.
-                    </p>
-                  )}
-                </Panel>
               </div>
 
               <div className="grid gap-5 lg:grid-cols-2">
-                <Panel
-                  title="Win rate by grade band"
-                  note="Does the checklist predict anything? If these do not climb, it does not — and n is on every row because four trades can show any number at all."
-                >
-                  <div className="space-y-1">
-                    {bands.map((b) => (
-                      <div key={b.label} className="flex items-baseline justify-between gap-3 py-1">
-                        <span className="text-[12px]" style={{ color: 'var(--text-dim)' }}>{b.label}</span>
-                        <span className="flex items-baseline gap-3">
-                          <span className="tabular-nums text-[12px] font-semibold">{pct(b.winRate)}</span>
-                          <span className="tabular-nums text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                            {r2(b.expectancy)}
-                          </span>
-                          <span
-                            className="tabular-nums text-[11px]"
-                            style={{ color: b.thin ? 'rgb(var(--amber))' : 'var(--text-faint)' }}
-                          >
-                            n {b.taken}
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {bands.some((b) => b.thin) && (
-                    <p className="mt-3 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
-                      Bands marked in amber have fewer than {MIN_SAMPLE} taken trades. Those numbers
-                      are noise — do not change anything because of them.
-                    </p>
-                  )}
-                </Panel>
-
-                <Panel title="R distribution" note="The shape the averages hide. One outlier carrying fifty small losses reads the same as a grind until you look.">
-                  <Histogram bins={rHistogram(trades)} />
-                </Panel>
-
-                <Panel title="Streaks" note="Journaling streak, not winning streak — the first is the one you control.">
-                  <Line label="Days journalled in a row" value={String(run.journalingCurrent)} tone={run.journalingCurrent > 0 ? 'win' : null} />
-                  <Line label="Best run of journalled days" value={String(run.journalingBest)} />
-                  <Line label="Clean days in a row" value={String(run.adherenceCurrent)} tone={run.adherenceCurrent > 0 ? 'win' : null} />
-                  <Line label="Best run of clean days" value={String(run.adherenceBest)} />
-                  <Line label="Longest win streak" value={String(e.longestWinStreak)} tone="win" />
-                  <Line label="Longest loss streak" value={String(e.longestLossStreak)} tone="loss" />
-                </Panel>
-
-                <Panel
-                  title="Hesitation against discipline"
-                  note="R left behind on setups that met the standard, against R saved by passing on ones that did not. If the first is bigger than your losses, entries are not the problem."
-                >
-                  <Line
-                    label="Cost of hesitation"
-                    value={passed.hesitationCount ? `−${Math.abs(passed.hesitationCostR).toFixed(1)}R` : '—'}
-                    tone={passed.hesitationCostR ? 'loss' : null}
-                  />
-                  <Line label="Setups passed that met the standard" value={String(passed.hesitationCount)} />
-                  <Line
-                    label="Value of discipline"
-                    value={passed.disciplineCount ? `+${Math.abs(passed.disciplineValueR).toFixed(1)}R` : '—'}
-                    tone={passed.disciplineValueR ? 'win' : null}
-                  />
-                  <Line label="Setups correctly passed" value={String(passed.disciplineCount)} tone="win" />
-                </Panel>
-
-                <Panel
-                  title="Management or selection?"
-                  note="Whether the losers were ever winners. If most of them were up a full R before stopping out, the entries were fine and the exits were not — and no win rate will ever tell you that."
-                >
-                  {exc.losersWithData === 0 ? (
-                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                      Nothing recorded yet. &ldquo;Reached +1R before the stop?&rdquo; is an optional
-                      question on the trade form.
-                    </p>
-                  ) : (
-                    <>
-                      <Line
-                        label="Losers that reached +1R first"
-                        value={`${exc.losersThatReached1R} of ${exc.losersWithData}`}
-                        tone={exc.losersThatReached1R > exc.losersWithData / 2 ? 'loss' : 'win'}
-                      />
-                      {exc.losersThatReached1R > exc.losersWithData / 2 ? (
-                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'rgb(var(--amber))' }}>
-                          More than half your losers were up a full R before they stopped you out. That is
-                          a management problem, not a selection one.
-                        </p>
-                      ) : (
-                        <p className="mt-2.5 text-[11px] leading-snug" style={{ color: 'var(--text-faint)' }}>
-                          Most losers never went your way. Those are selection, not management — the exits
-                          are not what is costing you.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </Panel>
-
-                <Panel title="R by mistake" note="Every tag on every trade, worst first. A tag on a winner still counts.">
-                  {tagRows.length ? <SignedBars rows={tagRows} /> : (
-                    <p className="text-[12px]" style={{ color: 'var(--text-faint)' }}>Nothing tagged yet.</p>
-                  )}
-                </Panel>
-
                 <Panel
                   title="Calibration"
                   note="Win rate by the confidence you claimed before you knew. If the 5s do not beat the 2s, the read is noise and size stays flat until it isn't."
@@ -607,10 +445,6 @@ export default async function StatsPage(
                       </div>
                     ))
                   )}
-                </Panel>
-
-                <Panel title="When you trade" note="Entry hour against weekday.">
-                  <WhenHeatmap cells={whenHeatmap(trades)} />
                 </Panel>
               </div>
 
